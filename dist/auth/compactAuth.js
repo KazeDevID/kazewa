@@ -2,24 +2,67 @@
 /**
  * @license MIT
  * Copyright (c) 2026 Michael (KazeDevID)
- * Ultra-Compact Session & Auth State Engine for Kazewa
- * 85-95% smaller than standard Baileys multi-file auth with zero inode exhaustion
+ * Pure Native Ultra-Compact Session & Auth State Engine for Kazewa
+ * 85-95% smaller than standard Baileys multi-file auth with zero external dependencies
  */
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.generateCurve25519KeyPair = generateCurve25519KeyPair;
 exports.initAuthCreds = initAuthCreds;
 exports.useCompactAuthState = useCompactAuthState;
 const node_fs_1 = __importDefault(require("node:fs"));
 const node_path_1 = __importDefault(require("node:path"));
 const node_zlib_1 = __importDefault(require("node:zlib"));
-const baileys_1 = require("@whiskeysockets/baileys");
+const node_crypto_1 = __importDefault(require("node:crypto"));
+function generateCurve25519KeyPair() {
+    const { privateKey, publicKey } = node_crypto_1.default.generateKeyPairSync('x25519', {
+        publicKeyEncoding: { type: 'spki', format: 'der' },
+        privateKeyEncoding: { type: 'pkcs8', format: 'der' }
+    });
+    return {
+        private: privateKey.subarray(privateKey.length - 32),
+        public: publicKey.subarray(publicKey.length - 32)
+    };
+}
 /**
- * Initialize brand-new credentials with authentic Curve25519 Buffer keypairs
+ * Pure Native Credential Initialization using node:crypto Curve25519
  */
 function initAuthCreds() {
-    return (0, baileys_1.initAuthCreds)();
+    const identityKeyPair = generateCurve25519KeyPair();
+    const preKeyPair = generateCurve25519KeyPair();
+    const signature = node_crypto_1.default
+        .createHmac('sha256', identityKeyPair.private)
+        .update(preKeyPair.public)
+        .digest();
+    return {
+        noiseKey: generateCurve25519KeyPair(),
+        pairingEphemeralKeyPair: generateCurve25519KeyPair(),
+        signedIdentityKey: identityKeyPair,
+        signedPreKey: {
+            keyPair: preKeyPair,
+            signature,
+            keyId: 1
+        },
+        registrationId: node_crypto_1.default.randomInt(1000, 9999),
+        advSecretKey: node_crypto_1.default.randomBytes(32).toString('base64'),
+        processedHistoryMessages: [],
+        nextPreKeyId: 2,
+        firstUnuploadedPreKeyId: 2,
+        accountSyncCounter: 0,
+        accountSettings: {
+            unarchiveChats: false
+        },
+        deviceId: node_crypto_1.default.randomBytes(16).toString('hex'),
+        phoneId: node_crypto_1.default.randomUUID(),
+        identityId: node_crypto_1.default.randomBytes(20),
+        registered: false,
+        backupToken: node_crypto_1.default.randomBytes(20),
+        registration: {
+            platform: 'android'
+        }
+    };
 }
 /**
  * Buffer replacer for JSON serialization

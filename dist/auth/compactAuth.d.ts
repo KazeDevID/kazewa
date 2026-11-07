@@ -1,8 +1,8 @@
 /**
  * @license MIT
  * Copyright (c) 2026 Michael (KazeDevID)
- * Ultra-Compact Session & Auth State Engine for Kazewa
- * 85-95% smaller than standard Baileys multi-file auth with zero inode exhaustion
+ * Pure Native Ultra-Compact Session & Auth State Engine for Kazewa
+ * 85-95% smaller than standard Baileys multi-file auth with zero external dependencies
  */
 import type { AuthenticationCreds, CompactAuthResult } from '../types/index.js';
 export interface CompactAuthOptions {
@@ -11,8 +11,12 @@ export interface CompactAuthOptions {
     maxStoredPreKeys?: number;
     encryptionPassword?: string;
 }
+export declare function generateCurve25519KeyPair(): {
+    private: Buffer;
+    public: Buffer;
+};
 /**
- * Initialize brand-new credentials with authentic Curve25519 Buffer keypairs
+ * Pure Native Credential Initialization using node:crypto Curve25519
  */
 export declare function initAuthCreds(): AuthenticationCreds;
 /**

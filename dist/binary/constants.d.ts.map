@@ -1,0 +1,1 @@
+{"version":3,"file":"constants.d.ts","sourceRoot":"","sources":["../../src/binary/constants.ts"],"names":[],"mappings":"AAAA;;;;GAIG;AAEH,eAAO,MAAM,IAAI;;;;;;;;;;;;;;;;;;CAkBhB,CAAC;AAEF,eAAO,MAAM,kBAAkB,EAAE,MAAM,EAqFtC,CAAC;AAEF,eAAO,MAAM,SAAS,EAAE;IAAE,CAAC,KAAK,EAAE,MAAM,GAAG;QAAE,IAAI,EAAE,MAAM,CAAC;QAAC,KAAK,EAAE,MAAM,CAAA;KAAE,CAAA;CAAO,CAAC"}

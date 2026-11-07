@@ -1,14 +1,14 @@
 /**
  * @license MIT
  * Copyright (c) 2026 Michael (KazeDevID)
- * Ultra-Compact Session & Auth State Engine for Kazewa
- * 85-95% smaller than standard Baileys multi-file auth with zero inode exhaustion
+ * Pure Native Ultra-Compact Session & Auth State Engine for Kazewa
+ * 85-95% smaller than standard Baileys multi-file auth with zero external dependencies
  */
 
 import fs from 'node:fs';
 import path from 'node:path';
 import zlib from 'node:zlib';
-import { initAuthCreds as baileysInitAuthCreds } from '@whiskeysockets/baileys';
+import crypto from 'node:crypto';
 import type {
   AuthenticationCreds,
   AuthenticationState,
@@ -34,11 +34,55 @@ export interface CompactAuthOptions {
   encryptionPassword?: string;
 }
 
+export function generateCurve25519KeyPair(): { private: Buffer; public: Buffer } {
+  const { privateKey, publicKey } = crypto.generateKeyPairSync('x25519', {
+    publicKeyEncoding: { type: 'spki', format: 'der' },
+    privateKeyEncoding: { type: 'pkcs8', format: 'der' }
+  });
+  return {
+    private: privateKey.subarray(privateKey.length - 32),
+    public: publicKey.subarray(publicKey.length - 32)
+  };
+}
+
 /**
- * Initialize brand-new credentials with authentic Curve25519 Buffer keypairs
+ * Pure Native Credential Initialization using node:crypto Curve25519
  */
 export function initAuthCreds(): AuthenticationCreds {
-  return baileysInitAuthCreds() as any;
+  const identityKeyPair = generateCurve25519KeyPair();
+  const preKeyPair = generateCurve25519KeyPair();
+  const signature = crypto
+    .createHmac('sha256', identityKeyPair.private)
+    .update(preKeyPair.public)
+    .digest();
+
+  return {
+    noiseKey: generateCurve25519KeyPair(),
+    pairingEphemeralKeyPair: generateCurve25519KeyPair(),
+    signedIdentityKey: identityKeyPair,
+    signedPreKey: {
+      keyPair: preKeyPair,
+      signature,
+      keyId: 1
+    } as any,
+    registrationId: crypto.randomInt(1000, 9999),
+    advSecretKey: crypto.randomBytes(32).toString('base64'),
+    processedHistoryMessages: [],
+    nextPreKeyId: 2,
+    firstUnuploadedPreKeyId: 2,
+    accountSyncCounter: 0,
+    accountSettings: {
+      unarchiveChats: false
+    },
+    deviceId: crypto.randomBytes(16).toString('hex'),
+    phoneId: crypto.randomUUID(),
+    identityId: crypto.randomBytes(20),
+    registered: false,
+    backupToken: crypto.randomBytes(20),
+    registration: {
+      platform: 'android'
+    }
+  };
 }
 
 /**

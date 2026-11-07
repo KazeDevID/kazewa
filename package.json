@@ -1,6 +1,6 @@
 {
   "name": "@kazedevid/kazewa",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "Next-Gen WhatsApp Web Bot API & Library with ultra-compact session storage, robust dual-pairing (QR & 8-digit Pairing Code), smooth signal state, and proto builders.",
   "keywords": [
     "whatsapp",
@@ -42,8 +42,6 @@
     "prepublishOnly": "npm run build"
   },
   "dependencies": {
-    "@whiskeysockets/baileys": "^7.0.0-rc14",
-    "pino": "^10.4.0",
     "qrcode": "^1.5.4",
     "ws": "^8.18.0"
   },

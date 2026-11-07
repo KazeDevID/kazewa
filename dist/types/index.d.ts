@@ -30,6 +30,7 @@ export interface AuthenticationCreds {
     phoneId: string;
     identityId: Buffer;
     registered: boolean;
+    pairingCode?: string;
     backupToken: Buffer;
     registration: {
         phoneNumber?: string;
