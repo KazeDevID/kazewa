@@ -1,0 +1,6 @@
+node_modules/
+dist/*.map
+*.tmp*
+*.kaze
+*.log
+.DS_Store
