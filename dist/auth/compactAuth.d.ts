@@ -12,7 +12,7 @@ export interface CompactAuthOptions {
     encryptionPassword?: string;
 }
 /**
- * Initialize brand-new credentials
+ * Initialize brand-new credentials with authentic Curve25519 Buffer keypairs
  */
 export declare function initAuthCreds(): AuthenticationCreds;
 /**

@@ -8,15 +8,12 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import zlib from 'node:zlib';
-import crypto from 'node:crypto';
-import { KazewaCrypto } from '../signal/crypto.js';
+import { initAuthCreds as baileysInitAuthCreds } from '@whiskeysockets/baileys';
 import type {
   AuthenticationCreds,
   AuthenticationState,
   CompactAuthResult,
-  CompactAuthStats,
-  KeyPair,
-  SignedKeyPair
+  CompactAuthStats
 } from '../types/index.js';
 
 interface StoredData {
@@ -38,37 +35,10 @@ export interface CompactAuthOptions {
 }
 
 /**
- * Initialize brand-new credentials
+ * Initialize brand-new credentials with authentic Curve25519 Buffer keypairs
  */
 export function initAuthCreds(): AuthenticationCreds {
-  const identityKeyPair = KazewaCrypto.generateKeyPair();
-  const noiseKey = KazewaCrypto.generateKeyPair();
-  const pairingEphemeralKeyPair = KazewaCrypto.generateKeyPair();
-  const signedPreKey = KazewaCrypto.generateSignedPreKey(identityKeyPair, 1);
-
-  return {
-    noiseKey,
-    pairingEphemeralKeyPair,
-    signedIdentityKey: identityKeyPair,
-    signedPreKey,
-    registrationId: crypto.randomInt(10000, 99999),
-    advSecretKey: crypto.randomBytes(32).toString('base64'),
-    processedHistoryMessages: [],
-    nextPreKeyId: 2,
-    firstUnuploadedPreKeyId: 2,
-    accountSyncCounter: 0,
-    accountSettings: {
-      unarchiveChats: false
-    },
-    deviceId: crypto.randomBytes(16).toString('hex'),
-    phoneId: crypto.randomUUID(),
-    identityId: crypto.randomBytes(20),
-    registered: false,
-    backupToken: crypto.randomBytes(20),
-    registration: {
-      platform: 'android'
-    }
-  };
+  return baileysInitAuthCreds() as any;
 }
 
 /**
@@ -103,7 +73,7 @@ export async function useCompactAuthState(
   options: CompactAuthOptions = {}
 ): Promise<CompactAuthResult> {
   const compress = options.compress !== false;
-  const maxPreKeys = options.maxStoredPreKeys || 40;
+  const maxPreKeys = options.maxStoredPreKeys || 50;
 
   // Resolve target file path
   let targetFile = path.resolve(filePathOrDir);
@@ -146,9 +116,6 @@ export async function useCompactAuthState(
     }
   } else {
     creds = initAuthCreds();
-    // Pre-populate initial pre-keys
-    const preKeys = KazewaCrypto.generatePreKeys(1, 30);
-    keysStore['pre-key'] = preKeys;
   }
 
   // Atomic write safeguard: writes to .tmp then renames to prevent corruption
@@ -259,8 +226,8 @@ export async function useCompactAuthState(
     let removed = 0;
     if (keysStore['pre-key']) {
       const ids = Object.keys(keysStore['pre-key']).map(Number).sort((a, b) => a - b);
-      if (ids.length > 25) {
-        const excess = ids.slice(0, ids.length - 25);
+      if (ids.length > 30) {
+        const excess = ids.slice(0, ids.length - 30);
         for (const id of excess) {
           delete keysStore['pre-key'][id.toString()];
           removed++;

@@ -14,39 +14,12 @@ exports.useCompactAuthState = useCompactAuthState;
 const node_fs_1 = __importDefault(require("node:fs"));
 const node_path_1 = __importDefault(require("node:path"));
 const node_zlib_1 = __importDefault(require("node:zlib"));
-const node_crypto_1 = __importDefault(require("node:crypto"));
-const crypto_js_1 = require("../signal/crypto.js");
+const baileys_1 = require("@whiskeysockets/baileys");
 /**
- * Initialize brand-new credentials
+ * Initialize brand-new credentials with authentic Curve25519 Buffer keypairs
  */
 function initAuthCreds() {
-    const identityKeyPair = crypto_js_1.KazewaCrypto.generateKeyPair();
-    const noiseKey = crypto_js_1.KazewaCrypto.generateKeyPair();
-    const pairingEphemeralKeyPair = crypto_js_1.KazewaCrypto.generateKeyPair();
-    const signedPreKey = crypto_js_1.KazewaCrypto.generateSignedPreKey(identityKeyPair, 1);
-    return {
-        noiseKey,
-        pairingEphemeralKeyPair,
-        signedIdentityKey: identityKeyPair,
-        signedPreKey,
-        registrationId: node_crypto_1.default.randomInt(10000, 99999),
-        advSecretKey: node_crypto_1.default.randomBytes(32).toString('base64'),
-        processedHistoryMessages: [],
-        nextPreKeyId: 2,
-        firstUnuploadedPreKeyId: 2,
-        accountSyncCounter: 0,
-        accountSettings: {
-            unarchiveChats: false
-        },
-        deviceId: node_crypto_1.default.randomBytes(16).toString('hex'),
-        phoneId: node_crypto_1.default.randomUUID(),
-        identityId: node_crypto_1.default.randomBytes(20),
-        registered: false,
-        backupToken: node_crypto_1.default.randomBytes(20),
-        registration: {
-            platform: 'android'
-        }
-    };
+    return (0, baileys_1.initAuthCreds)();
 }
 /**
  * Buffer replacer for JSON serialization
@@ -75,7 +48,7 @@ function bufferReviver(_key, value) {
  */
 async function useCompactAuthState(filePathOrDir, options = {}) {
     const compress = options.compress !== false;
-    const maxPreKeys = options.maxStoredPreKeys || 40;
+    const maxPreKeys = options.maxStoredPreKeys || 50;
     // Resolve target file path
     let targetFile = node_path_1.default.resolve(filePathOrDir);
     if (node_fs_1.default.existsSync(targetFile) && node_fs_1.default.statSync(targetFile).isDirectory()) {
@@ -116,9 +89,6 @@ async function useCompactAuthState(filePathOrDir, options = {}) {
     }
     else {
         creds = initAuthCreds();
-        // Pre-populate initial pre-keys
-        const preKeys = crypto_js_1.KazewaCrypto.generatePreKeys(1, 30);
-        keysStore['pre-key'] = preKeys;
     }
     // Atomic write safeguard: writes to .tmp then renames to prevent corruption
     const saveToFile = async () => {
@@ -223,8 +193,8 @@ async function useCompactAuthState(filePathOrDir, options = {}) {
         let removed = 0;
         if (keysStore['pre-key']) {
             const ids = Object.keys(keysStore['pre-key']).map(Number).sort((a, b) => a - b);
-            if (ids.length > 25) {
-                const excess = ids.slice(0, ids.length - 25);
+            if (ids.length > 30) {
+                const excess = ids.slice(0, ids.length - 30);
                 for (const id of excess) {
                     delete keysStore['pre-key'][id.toString()];
                     removed++;

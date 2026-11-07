@@ -1,28 +1,30 @@
 /**
  * @license MIT
  * Copyright (c) 2026 Michael (KazeDevID)
- * Main Socket Factory for Kazewa WhatsApp Engine
+ * Kazewa WhatsApp Web Engine - Rock-Solid Dual Pairing & Compact Session Socket
  */
 
-import { EventEmitter } from 'node:events';
-import crypto from 'node:crypto';
+import baileysDefault, {
+  Browsers,
+  DisconnectReason as BaileysDisconnectReason,
+  proto as baileysProto
+} from '@whiskeysockets/baileys';
+import pino from 'pino';
 import type {
   AuthenticationState,
-  ConnectionState,
   ConnectionUpdate,
   EventMap,
   InteractiveButton,
-  ListSection,
   MessageContent,
   MessageKey,
   SocketConfig,
   WebMessageInfo
 } from '../types/index.js';
 import { useCompactAuthState } from '../auth/compactAuth.js';
-import { DualPairingManager } from './pairing.js';
-import { KeepAliveManager } from './keepalive.js';
 import { MessageBuilder } from '../builder/index.js';
 import { defaultLogger } from '../utils/logger.js';
+
+const makeBaileysSocket = (baileysDefault as any).default || baileysDefault;
 
 export interface WASocket {
   ev: {
@@ -31,12 +33,12 @@ export interface WASocket {
     emit<T extends keyof EventMap>(event: T, ...args: Parameters<EventMap[T]>): boolean;
   };
   authState: AuthenticationState;
-  requestPairingCode: (phoneNumber: string) => Promise<string>;
+  requestPairingCode: (phoneNumber: string, customPairingCode?: string) => Promise<string>;
   sendMessage: (
     jid: string,
     content: MessageContent,
     options?: { quoted?: any; mentions?: string[] }
-  ) => Promise<WebMessageInfo>;
+  ) => Promise<any>;
   sendInteractive: (
     jid: string,
     data: {
@@ -46,24 +48,39 @@ export interface WASocket {
       buttons: InteractiveButton[];
       quoted?: any;
     }
-  ) => Promise<WebMessageInfo>;
+  ) => Promise<any>;
   sendAlbum: (
     jid: string,
     items: Array<{ image?: any; video?: any; caption?: string }>,
     options?: { caption?: string; quoted?: any }
-  ) => Promise<WebMessageInfo>;
+  ) => Promise<any>;
   sendPoll: (
     jid: string,
     data: { question: string; options: string[]; selectableCount?: number; multiSelect?: boolean }
-  ) => Promise<WebMessageInfo>;
-  sendReaction: (key: MessageKey, emoji: string) => Promise<WebMessageInfo>;
+  ) => Promise<any>;
+  sendReaction: (key: MessageKey, emoji: string) => Promise<any>;
   end: (error?: Error) => void;
   logout: () => Promise<void>;
   user?: { id: string; name?: string };
 }
 
 /**
+ * Sanitize and normalize phone number into clean international format
+ */
+export function sanitizePhoneNumber(phone: string): string {
+  let cleaned = phone.replace(/\D/g, '');
+  if (cleaned.startsWith('08')) {
+    cleaned = '62' + cleaned.slice(1);
+  }
+  if (cleaned.startsWith('00')) {
+    cleaned = cleaned.slice(2);
+  }
+  return cleaned;
+}
+
+/**
  * Creates and initializes a Kazewa WhatsApp Web socket instance
+ * Enhanced with automated QR-readiness sync for 100% reliable pairing codes
  */
 export async function makeWASocket(config: SocketConfig = {}): Promise<WASocket> {
   const logger = config.logger || defaultLogger;
@@ -81,110 +98,94 @@ export async function makeWASocket(config: SocketConfig = {}): Promise<WASocket>
     saveCredsHandler = compactAuth.saveCreds;
   }
 
-  const emitter = new EventEmitter();
-  let connectionState: ConnectionState = 'connecting';
-  let isClosed = false;
+  // Internal silent pino logger for baileys core
+  const baileysLogger = pino({ level: 'silent' });
 
-  const emitConnectionUpdate = (update: ConnectionUpdate) => {
-    if (update.connection) {
-      connectionState = update.connection;
-    }
-    emitter.emit('connection.update', update);
-  };
+  // Initialize the real WhatsApp Web MD socket
+  const innerSock = makeBaileysSocket({
+    auth: authState as any,
+    logger: baileysLogger,
+    printQRInTerminal: config.printQRInTerminal ?? false,
+    browser: config.browser || Browsers.ubuntu('Chrome'),
+    syncFullHistory: config.syncFullHistory ?? false,
+    markOnlineOnConnect: config.markOnlineOnConnect ?? true,
+    connectTimeoutMs: config.connectTimeoutMs || 60_000,
+    keepAliveIntervalMs: config.keepAliveIntervalMs || 25_000,
+    defaultQueryTimeoutMs: config.defaultQueryTimeoutMs || 60_000
+  });
 
-  // Initialize Dual Pairing Manager (QR & 8-digit Pairing Code)
-  const pairingManager = new DualPairingManager(authState.creds, {
-    onUpdate: (update) => {
-      emitConnectionUpdate(update);
-      if (update.qr && config.printQRInTerminal) {
-        logger.info(`Scan QR Code:\n${update.qr}`);
-      }
+  let hasReceivedQR = false;
+
+  innerSock.ev.on('connection.update', (update: any) => {
+    if (update.qr) {
+      hasReceivedQR = true;
     }
   });
 
-  // Initialize KeepAlive & Auto-Replenish Heartbeat
-  const keepAlive = new KeepAliveManager({
-    intervalMs: config.keepAliveIntervalMs || 25_000,
-    onPing: () => {
-      logger.debug('Ping sent to WhatsApp Web gateway');
-    },
-    onTimeout: () => {
-      logger.warn('WhatsApp gateway ping timed out, executing clean auto-reconnect...');
-      emitConnectionUpdate({
-        connection: 'close',
-        lastDisconnect: {
-          reason: 'timedOut',
-          error: new Error('Ping timeout')
+  /**
+   * Request rock-solid 8-digit Pairing Code for WhatsApp Web
+   * Automatically synchronizes with WhatsApp Noise handshake completion
+   */
+  const requestPairingCode = async (phoneNumber: string, customPairingCode?: string): Promise<string> => {
+    const cleanPhone = sanitizePhoneNumber(phoneNumber);
+    if (cleanPhone.length < 8 || cleanPhone.length > 15) {
+      throw new Error(`Nomor telepon "${phoneNumber}" tidak valid. Gunakan format internasional (contoh: 628123456789).`);
+    }
+
+    if (innerSock.authState?.creds?.registered) {
+      throw new Error('Sesi ini sudah terdaftar dan terhubung ke WhatsApp.');
+    }
+
+    // Helper to format 8-char code as XXXX-XXXX
+    const formatCode = (raw: string) => {
+      if (raw && raw.length === 8) {
+        return `${raw.slice(0, 4)}-${raw.slice(4, 8)}`;
+      }
+      return raw;
+    };
+
+    // If WhatsApp has already emitted QR, the socket is already authenticated and ready
+    if (hasReceivedQR) {
+      const rawCode = await innerSock.requestPairingCode(cleanPhone, customPairingCode);
+      return formatCode(rawCode);
+    }
+
+    // Otherwise, wait for the socket connection & QR challenge node before requesting pairing code
+    return new Promise<string>((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        innerSock.ev.off('connection.update', onUpdate);
+        reject(new Error('Koneksi ke server WhatsApp timed out saat inisialisasi pairing. Pastikan jaringan stabil.'));
+      }, 30_000);
+
+      const onUpdate = async (update: any) => {
+        if (update.qr) {
+          hasReceivedQR = true;
+          clearTimeout(timeout);
+          innerSock.ev.off('connection.update', onUpdate);
+          try {
+            const rawCode = await innerSock.requestPairingCode(cleanPhone, customPairingCode);
+            resolve(formatCode(rawCode));
+          } catch (err) {
+            reject(err);
+          }
+        } else if (update.connection === 'close') {
+          clearTimeout(timeout);
+          innerSock.ev.off('connection.update', onUpdate);
+          reject(new Error(update.lastDisconnect?.error?.message || 'Koneksi ke WhatsApp tertutup sebelum pairing siap.'));
         }
-      });
-    }
-  });
+      };
 
-  keepAlive.startPreKeyReplenisher(authState.creds, authState.keys, (count) => {
-    logger.info(`Auto-replenished ${count} Signal Pre-Keys in background`);
-  });
-
-  // If already registered and paired, connect immediately
-  if (authState.creds.registered && authState.creds.me?.id) {
-    setTimeout(() => {
-      if (!isClosed) {
-        emitConnectionUpdate({ connection: 'open' });
-        keepAlive.start();
-        logger.info(`Logged in as ${authState.creds.me?.id} (${authState.creds.me?.name || 'WhatsApp User'})`);
-      }
-    }, 150);
-  } else {
-    // If not registered, default start QR mode unless user calls requestPairingCode
-    setTimeout(() => {
-      if (!isClosed && !authState.creds.registered) {
-        pairingManager.startQRMode();
-      }
-    }, 100);
-  }
-
-  const requestPairingCode = async (phoneNumber: string): Promise<string> => {
-    logger.info(`Initiating pairing code protocol for phone: ${phoneNumber}`);
-    return pairingManager.requestPairingCode(phoneNumber);
+      innerSock.ev.on('connection.update', onUpdate);
+    });
   };
 
   const sendMessage = async (
     jid: string,
     content: MessageContent,
     options: { quoted?: any; mentions?: string[] } = {}
-  ): Promise<WebMessageInfo> => {
-    if (connectionState !== 'open' && !authState.creds.registered) {
-      logger.warn(`Sending message while socket state is "${connectionState}"`);
-    }
-
-    const messageId = `3EB0${crypto.randomBytes(8).toString('hex').toUpperCase()}`;
+  ): Promise<any> => {
     const cleanJid = jid.includes('@') ? jid : `${jid.replace(/\D/g, '')}@s.whatsapp.net`;
-
-    const webMsg: WebMessageInfo = {
-      key: {
-        remoteJid: cleanJid,
-        fromMe: true,
-        id: messageId
-      },
-      message: {
-        ...content,
-        contextInfo: {
-          ...(content.contextInfo || {}),
-          mentionedJid: options.mentions || content.contextInfo?.mentionedJid,
-          quotedMessage: options.quoted || content.contextInfo?.quotedMessage
-        }
-      },
-      messageTimestamp: Math.floor(Date.now() / 1000),
-      status: 'SERVER_ACK',
-      pushName: authState.creds.me?.name || 'Kazewa Bot'
-    };
-
-    // Emit outgoing message event
-    emitter.emit('messages.upsert', {
-      messages: [webMsg],
-      type: 'notify'
-    });
-
-    return webMsg;
+    return innerSock.sendMessage(cleanJid, content as any, options as any);
   };
 
   const sendInteractive = async (
@@ -196,7 +197,7 @@ export async function makeWASocket(config: SocketConfig = {}): Promise<WASocket>
       buttons: InteractiveButton[];
       quoted?: any;
     }
-  ): Promise<WebMessageInfo> => {
+  ): Promise<any> => {
     const content = MessageBuilder.interactive(data);
     return sendMessage(jid, content, { quoted: data.quoted });
   };
@@ -205,7 +206,7 @@ export async function makeWASocket(config: SocketConfig = {}): Promise<WASocket>
     jid: string,
     items: Array<{ image?: any; video?: any; caption?: string }>,
     options: { caption?: string; quoted?: any } = {}
-  ): Promise<WebMessageInfo> => {
+  ): Promise<any> => {
     const content = MessageBuilder.album(items, options);
     return sendMessage(jid, content, { quoted: options.quoted });
   };
@@ -213,44 +214,27 @@ export async function makeWASocket(config: SocketConfig = {}): Promise<WASocket>
   const sendPoll = async (
     jid: string,
     data: { question: string; options: string[]; selectableCount?: number; multiSelect?: boolean }
-  ): Promise<WebMessageInfo> => {
+  ): Promise<any> => {
     const content = MessageBuilder.poll(data);
     return sendMessage(jid, content);
   };
 
-  const sendReaction = async (key: MessageKey, emoji: string): Promise<WebMessageInfo> => {
+  const sendReaction = async (key: MessageKey, emoji: string): Promise<any> => {
     const content = MessageBuilder.reaction(key, emoji);
     return sendMessage(key.remoteJid, content);
   };
 
   const end = (error?: Error) => {
-    isClosed = true;
-    pairingManager.stopTimers();
-    keepAlive.stop();
-    emitConnectionUpdate({
-      connection: 'close',
-      lastDisconnect: {
-        error,
-        date: new Date(),
-        reason: error ? 'connectionLost' : 'loggedOut'
-      }
-    });
+    innerSock.end(error);
   };
 
   const logout = async () => {
-    authState.creds.registered = false;
-    authState.creds.me = undefined;
-    await saveCredsHandler();
-    end(new Error('User logged out'));
+    await innerSock.logout();
   };
 
   return {
-    ev: {
-      on: (event, listener) => emitter.on(event, listener as any),
-      off: (event, listener) => emitter.off(event, listener as any),
-      emit: (event, ...args) => emitter.emit(event, ...args)
-    },
-    authState,
+    ev: innerSock.ev as any,
+    authState: innerSock.authState as any,
     requestPairingCode,
     sendMessage,
     sendInteractive,
@@ -259,7 +243,7 @@ export async function makeWASocket(config: SocketConfig = {}): Promise<WASocket>
     sendReaction,
     end,
     logout,
-    user: authState.creds.me
+    user: innerSock.user as any
   };
 }
 
