@@ -1,6 +1,6 @@
 {
   "name": "@kazedevid/kazewa",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Next-Gen WhatsApp Web Bot API & Library with ultra-compact session storage, robust dual-pairing (QR & 8-digit Pairing Code), smooth signal state, and proto builders.",
   "keywords": [
     "whatsapp",
