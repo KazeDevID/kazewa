@@ -191,7 +191,7 @@ export async function makeWASocket(config: SocketConfig = {}): Promise<WASocket>
       }
     });
 
-    ws.on('close', (code, reason) => {
+    ws.on('close', (code: number, reason: Buffer) => {
       logger.warn(`WhatsApp socket closed: code ${code}, ${reason.toString()}`);
       isHandshakeComplete = false;
       stopPingKeepAlive();
@@ -204,7 +204,7 @@ export async function makeWASocket(config: SocketConfig = {}): Promise<WASocket>
       });
     });
 
-    ws.on('error', (err) => {
+    ws.on('error', (err: any) => {
       logger.error('WebSocket error:', err.message);
     });
   };
