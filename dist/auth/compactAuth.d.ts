@@ -1,15 +1,7 @@
-/**
- * @license MIT
- * Copyright (c) 2026 Michael (KazeDevID)
- * Kazewa Compact Single-File Auth Engine
- * Standalone implementation powered solely by native `node:crypto`, `node:fs`, and `node:zlib`
- */
-import type { AuthenticationCreds, CompactAuthOptions, CompactAuthResult } from '../types/index.js';
-export declare const BufferJSON: {
-    replacer: (_key: string, value: any) => any;
-    reviver: (_key: string, value: any) => any;
-};
-export declare function initAuthCreds(): AuthenticationCreds;
+import { BufferJSON } from "@whiskeysockets/baileys";
+import type { CompactAuthOptions, CompactAuthResult } from "../types/index.js";
+export { BufferJSON };
+export declare const initAuthCreds: () => import("@whiskeysockets/baileys").AuthenticationCreds;
 /**
  * High-performance, ultra-compact single-file WhatsApp auth state.
  * Stores all credentials and Signal protocol keys inside a single compressed .kaze file.

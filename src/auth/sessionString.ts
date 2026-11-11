@@ -3,10 +3,10 @@
  * Copyright (c) 2026 Michael (KazeDevID)
  * Zero-Disk Session String Auth Engine for Serverless & Cloud Deployments
  */
-
-import zlib from 'node:zlib';
-import type { AuthenticationCreds, AuthenticationState, SignalKeyStore } from '../types/index.js';
-import { BufferJSON, initAuthCreds } from './compactAuth.js';
+import zlib from "node:zlib";
+import { proto } from "@whiskeysockets/baileys";
+import type { AuthenticationCreds, AuthenticationState, SignalKeyStore } from "../types/index.js";
+import { BufferJSON, initAuthCreds } from "./compactAuth.js";
 
 export interface SessionStringAuthResult {
   state: AuthenticationState;
@@ -14,9 +14,6 @@ export interface SessionStringAuthResult {
   getSessionString: () => string;
 }
 
-/**
- * Load WhatsApp session directly from a single Portable Session String (e.g. from process.env.SESSION_ID)
- */
 export async function useSessionStringAuthState(
   sessionString?: string,
   onUpdate?: (updatedString: string) => void | Promise<void>
@@ -24,16 +21,16 @@ export async function useSessionStringAuthState(
   let creds: AuthenticationCreds = initAuthCreds();
   let keysStore: { [type: string]: { [id: string]: any } } = {};
 
-  if (sessionString && sessionString.startsWith('KAZE_WA:v1:')) {
+  if (sessionString && sessionString.startsWith("KAZE_WA:v1:")) {
     try {
-      const base64Data = sessionString.replace('KAZE_WA:v1:', '');
-      const compressed = Buffer.from(base64Data, 'base64');
-      const jsonText = zlib.gunzipSync(compressed).toString('utf-8');
+      const base64Data = sessionString.replace("KAZE_WA:v1:", "");
+      const compressed = Buffer.from(base64Data, "base64");
+      const jsonText = zlib.gunzipSync(compressed).toString("utf-8");
       const parsed = JSON.parse(jsonText, BufferJSON.reviver);
       creds = parsed.creds || creds;
       keysStore = parsed.keys || {};
     } catch (err) {
-      console.warn('[Kazewa] Invalid session string provided, creating fresh session credentials:', err);
+      console.warn("[Kazewa] Invalid session string provided, creating fresh session credentials:", err);
     }
   }
 
@@ -44,12 +41,12 @@ export async function useSessionStringAuthState(
       keys: keysStore,
       metadata: {
         updatedAt: Date.now(),
-        platform: 'kazewa-string'
+        platform: "kazewa-string"
       }
     };
     const jsonStr = JSON.stringify(payload, BufferJSON.replacer);
-    const compressed = zlib.gzipSync(Buffer.from(jsonStr, 'utf-8'), { level: 9 });
-    return `KAZE_WA:v1:${compressed.toString('base64')}`;
+    const compressed = zlib.gzipSync(Buffer.from(jsonStr, "utf-8"), { level: 9 });
+    return `KAZE_WA:v1:${compressed.toString("base64")}`;
   };
 
   const triggerUpdate = async () => {
@@ -68,7 +65,10 @@ export async function useSessionStringAuthState(
       const data: { [id: string]: T } = {};
       const bucket = keysStore[type] || {};
       for (const id of ids) {
-        const val = bucket[id];
+        let val = bucket[id];
+        if (type === "app-state-sync-key" && val) {
+          val = proto.Message.AppStateSyncKeyData.fromObject(val) as any;
+        }
         if (val !== undefined && val !== null) {
           data[id] = val;
         }

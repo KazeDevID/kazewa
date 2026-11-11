@@ -62,8 +62,8 @@ export class MessageBuilder {
     }
 
     if (info.aiIcon) {
-      context.aiIcon = true;
-      context.botInfo = {
+      (context as any).aiIcon = true;
+      (context as any).botInfo = {
         targetId: 'Meta AI',
         senderPersonaId: 'Kazewa-AI-Agent'
       };

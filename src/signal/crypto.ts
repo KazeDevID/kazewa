@@ -61,11 +61,7 @@ export class KazewaCrypto {
     hmac.update(Buffer.from(keyPair.public));
     const signature = new Uint8Array(hmac.digest());
 
-    return {
-      ...keyPair,
-      signature,
-      keyId
-    };
+    return { keyPair, signature, keyId };
   }
 
   /**

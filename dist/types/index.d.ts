@@ -2,83 +2,23 @@
  * @license MIT
  * Copyright (c) 2026 Michael (KazeDevID)
  * Kazewa WhatsApp Web Bot API & Protocol Library
- * Pure standalone type definitions
+ * Pure standalone & Baileys-aligned type definitions
  */
-export declare enum DisconnectReason {
-    loggedOut = 401,
-    forbidden = 403,
-    timedOut = 408,
-    connectionClosed = 428,
-    connectionLost = 408,
-    connectionReplaced = 440,
-    badSession = 500,
-    restartRequired = 515,
-    multideviceMismatch = 411,
-    unavailableService = 503
-}
-export type ConnectionState = 'close' | 'connecting' | 'open';
+import type { AuthenticationCreds as BaileysAuthCreds, AuthenticationState as BaileysAuthState, SignalKeyStore as BaileysSignalKeyStore, ConnectionState as BaileysConnState, UserFacingSocketConfig, AnyMessageContent } from "@whiskeysockets/baileys";
+export { DisconnectReason } from "@whiskeysockets/baileys";
+export type ConnectionState = BaileysConnState | "close" | "connecting" | "open";
 export interface KeyPair {
     public: Uint8Array;
     private: Uint8Array;
 }
-export interface SignedKeyPair extends KeyPair {
+export interface SignedKeyPair {
+    keyPair: KeyPair;
     signature: Uint8Array;
     keyId: number;
 }
-export interface AuthenticationCreds {
-    noiseKey: KeyPair;
-    pairingEphemeralKeyPair: KeyPair;
-    signedIdentityKey: KeyPair;
-    signedPreKey: SignedKeyPair;
-    registrationId: number;
-    advSecretKey: string;
-    processedHistoryMessages: string[];
-    nextPreKeyId: number;
-    firstUnuploadedPreKeyId: number;
-    accountSyncCounter: number;
-    accountSettings: {
-        unarchiveChats: boolean;
-    };
-    deviceId: string;
-    phoneId: string;
-    identityId: Buffer;
-    registered: boolean;
-    pairingCode?: string;
-    backupToken: Buffer;
-    registration: {
-        phoneNumber?: string;
-        method?: 'qr' | 'code';
-        pairedAt?: number;
-        platform?: string;
-    };
-    me?: {
-        id: string;
-        name?: string;
-        lid?: string;
-    };
-    signalIdentities?: Array<{
-        identifier: {
-            name: string;
-            deviceId: number;
-        };
-        identifierKey: Uint8Array;
-    }>;
-}
-export interface SignalKeyStore {
-    get: <T>(type: string, ids: string[]) => Promise<{
-        [id: string]: T;
-    }>;
-    set: (data: {
-        [type: string]: {
-            [id: string]: any;
-        };
-    }) => Promise<void>;
-    clear?: () => Promise<void>;
-}
-export interface AuthenticationState {
-    creds: AuthenticationCreds;
-    keys: SignalKeyStore;
-}
+export type AuthenticationCreds = BaileysAuthCreds;
+export type SignalKeyStore = BaileysSignalKeyStore;
+export type AuthenticationState = BaileysAuthState;
 export interface CompactAuthOptions {
     compress?: boolean;
     maxStoredPreKeys?: number;
@@ -130,7 +70,7 @@ export interface ContextInfo {
     externalAdReply?: {
         title?: string;
         body?: string;
-        previewType?: 'NONE' | 'PHOTO' | 'VIDEO';
+        previewType?: "NONE" | "PHOTO" | "VIDEO";
         thumbnailUrl?: string;
         thumbnail?: Buffer | Uint8Array;
         sourceUrl?: string;
@@ -141,7 +81,7 @@ export interface ContextInfo {
     aiIcon?: boolean;
 }
 export interface InteractiveButton {
-    type: 'reply' | 'url' | 'call' | 'copy';
+    type: "reply" | "url" | "call" | "copy";
     id?: string;
     text: string;
     url?: string;
@@ -198,7 +138,7 @@ export interface MessageContent {
         title?: string;
         body: string;
         footer?: string;
-        headerType?: 'TEXT' | 'IMAGE' | 'VIDEO';
+        headerType?: "TEXT" | "IMAGE" | "VIDEO";
         headerMedia?: Buffer | Uint8Array | string;
         buttons: InteractiveButton[];
     };
@@ -229,7 +169,7 @@ export interface WebMessageInfo {
     key: MessageKey;
     message?: MessageContent;
     messageTimestamp: number;
-    status?: 'PENDING' | 'SERVER_ACK' | 'DELIVERY_ACK' | 'READ';
+    status?: "PENDING" | "SERVER_ACK" | "DELIVERY_ACK" | "READ";
     participant?: string;
     pushName?: string;
     broadcast?: boolean;
@@ -245,19 +185,20 @@ export interface SocketConfig {
     maxRetries?: number;
     defaultQueryTimeoutMs?: number;
     logger?: any;
+    options?: Partial<UserFacingSocketConfig>;
 }
 export type EventMap = {
-    'connection.update': (update: ConnectionUpdate) => void;
-    'creds.update': (creds: AuthenticationCreds) => void;
-    'messages.upsert': (data: {
-        messages: WebMessageInfo[];
-        type: 'notify' | 'append';
+    "connection.update": (update: ConnectionUpdate) => void;
+    "creds.update": (creds: AuthenticationCreds) => void;
+    "messages.upsert": (data: {
+        messages: any[];
+        type: "notify" | "append";
     }) => void;
-    'messages.update': (data: {
+    "messages.update": (data: {
         key: MessageKey;
         update: Partial<WebMessageInfo>;
     }[]) => void;
-    'presence.update': (data: {
+    "presence.update": (data: {
         id: string;
         presences: {
             [participant: string]: {
@@ -265,6 +206,51 @@ export type EventMap = {
             };
         };
     }) => void;
-    'groups.update': (data: any) => void;
+    "groups.update": (data: any) => void;
 };
+export interface WASocket {
+    ev: {
+        on<T extends keyof EventMap>(event: T, listener: EventMap[T]): void;
+        off<T extends keyof EventMap>(event: T, listener: EventMap[T]): void;
+        emit<T extends keyof EventMap>(event: T, ...args: Parameters<EventMap[T]>): boolean;
+    };
+    authState: AuthenticationState;
+    requestPairingCode: (phoneNumber: string, customPairingCode?: string) => Promise<string>;
+    sendMessage: (jid: string, content: AnyMessageContent | MessageContent, options?: {
+        quoted?: any;
+        mentions?: string[];
+    }) => Promise<any>;
+    sendInteractive: (jid: string, data: {
+        title?: string;
+        body: string;
+        footer?: string;
+        buttons: InteractiveButton[];
+        quoted?: any;
+    }) => Promise<any>;
+    sendAlbum: (jid: string, items: Array<{
+        image?: any;
+        video?: any;
+        caption?: string;
+    }>, options?: {
+        caption?: string;
+        quoted?: any;
+    }) => Promise<any>;
+    sendPoll: (jid: string, data: {
+        question: string;
+        options: string[];
+        selectableCount?: number;
+        multiSelect?: boolean;
+    }) => Promise<any>;
+    sendReaction: (key: MessageKey, emoji: string) => Promise<any>;
+    end: (error?: Error) => void;
+    logout: () => Promise<void>;
+    user?: {
+        id: string;
+        name?: string;
+        lid?: string;
+    };
+    ws?: any;
+    [key: string]: any;
+}
+export type KazewaSocket = WASocket;
 //# sourceMappingURL=index.d.ts.map

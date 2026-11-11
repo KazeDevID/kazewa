@@ -2,14 +2,16 @@
  * @license MIT
  * Copyright (c) 2026 Michael (KazeDevID)
  * Kazewa Compact Single-File Auth Engine
- * Standalone implementation powered solely by native `node:crypto`, `node:fs`, and `node:zlib`
+ * Stores full WhatsApp credentials and Signal keys in a single compressed .kaze file.
  */
-
-import fs from 'node:fs';
-import path from 'node:path';
-import zlib from 'node:zlib';
-import crypto from 'node:crypto';
-import { KazewaCrypto } from '../signal/crypto.js';
+import fs from "node:fs";
+import path from "node:path";
+import zlib from "node:zlib";
+import {
+  initAuthCreds as initBaileysCreds,
+  BufferJSON,
+  proto
+} from "@whiskeysockets/baileys";
 import type {
   AuthenticationCreds,
   AuthenticationState,
@@ -17,54 +19,10 @@ import type {
   CompactAuthResult,
   CompactAuthStats,
   SignalKeyStore
-} from '../types/index.js';
+} from "../types/index.js";
 
-export const BufferJSON = {
-  replacer: (_key: string, value: any): any => {
-    if (Buffer.isBuffer(value) || value instanceof Uint8Array) {
-      return {
-        type: 'Buffer',
-        data: Buffer.from(value).toString('base64')
-      };
-    }
-    return value;
-  },
-  reviver: (_key: string, value: any): any => {
-    if (value && typeof value === 'object' && value.type === 'Buffer' && typeof value.data === 'string') {
-      return Buffer.from(value.data, 'base64');
-    }
-    return value;
-  }
-};
-
-export function initAuthCreds(): AuthenticationCreds {
-  const identityKey = KazewaCrypto.generateKeyPair();
-  const signedPreKey = KazewaCrypto.generateSignedPreKey(identityKey, 1);
-
-  return {
-    noiseKey: KazewaCrypto.generateKeyPair(),
-    pairingEphemeralKeyPair: KazewaCrypto.generateKeyPair(),
-    signedIdentityKey: identityKey,
-    signedPreKey,
-    registrationId: crypto.randomInt(1000, 9999),
-    advSecretKey: crypto.randomBytes(32).toString('base64'),
-    processedHistoryMessages: [],
-    nextPreKeyId: 2,
-    firstUnuploadedPreKeyId: 2,
-    accountSyncCounter: 0,
-    accountSettings: {
-      unarchiveChats: false
-    },
-    deviceId: crypto.randomBytes(16).toString('hex'),
-    phoneId: crypto.randomUUID(),
-    identityId: crypto.randomBytes(20),
-    registered: false,
-    backupToken: crypto.randomBytes(20),
-    registration: {
-      platform: 'android'
-    }
-  };
-}
+export { BufferJSON };
+export const initAuthCreds = initBaileysCreds;
 
 interface StoredData {
   version: number;
@@ -90,8 +48,8 @@ export async function useCompactAuthState(
 
   let targetFile = path.resolve(filePathOrDir);
   if (fs.existsSync(targetFile) && fs.statSync(targetFile).isDirectory()) {
-    targetFile = path.join(targetFile, 'session.kaze');
-  } else if (!targetFile.endsWith('.kaze') && !targetFile.endsWith('.json')) {
+    targetFile = path.join(targetFile, "session.kaze");
+  } else if (!targetFile.endsWith(".kaze") && !targetFile.endsWith(".json")) {
     targetFile = `${targetFile}.kaze`;
   }
 
@@ -108,13 +66,11 @@ export async function useCompactAuthState(
     try {
       const rawBuffer = fs.readFileSync(targetFile);
       let jsonText: string;
-
       if (rawBuffer.length >= 2 && rawBuffer[0] === 0x1f && rawBuffer[1] === 0x8b) {
-        jsonText = zlib.gunzipSync(rawBuffer).toString('utf-8');
+        jsonText = zlib.gunzipSync(rawBuffer).toString("utf-8");
       } else {
-        jsonText = rawBuffer.toString('utf-8');
+        jsonText = rawBuffer.toString("utf-8");
       }
-
       const parsed: StoredData = JSON.parse(jsonText, BufferJSON.reviver);
       creds = parsed.creds || initAuthCreds();
       keysStore = parsed.keys || {};
@@ -128,18 +84,19 @@ export async function useCompactAuthState(
   }
 
   let isWriting = false;
+
   const saveToFile = async () => {
     if (isWriting) {
-      await new Promise((r) => setTimeout(r, 10));
+      await new Promise((r) => setTimeout(r, 15));
     }
     isWriting = true;
     try {
-      if (keysStore['pre-key']) {
-        const preKeyIds = Object.keys(keysStore['pre-key']).map(Number).sort((a, b) => a - b);
+      if (keysStore["pre-key"]) {
+        const preKeyIds = Object.keys(keysStore["pre-key"]).map(Number).sort((a, b) => a - b);
         if (preKeyIds.length > maxPreKeys) {
           const toRemove = preKeyIds.slice(0, preKeyIds.length - maxPreKeys);
           for (const id of toRemove) {
-            delete keysStore['pre-key'][id.toString()];
+            delete keysStore["pre-key"][id.toString()];
           }
         }
       }
@@ -151,23 +108,24 @@ export async function useCompactAuthState(
         metadata: {
           createdAt: lastSavedAt,
           updatedAt: Date.now(),
-          platform: 'kazewa-engine-v1'
+          platform: "kazewa-engine-v1.0.7"
         }
       };
 
       const jsonStr = JSON.stringify(payload, BufferJSON.replacer);
       let outputBuffer: Buffer;
-
       if (compress) {
-        outputBuffer = zlib.gzipSync(Buffer.from(jsonStr, 'utf-8'), { level: 9 });
+        outputBuffer = zlib.gzipSync(Buffer.from(jsonStr, "utf-8"), { level: 9 });
       } else {
-        outputBuffer = Buffer.from(jsonStr, 'utf-8');
+        outputBuffer = Buffer.from(jsonStr, "utf-8");
       }
 
       const tempFile = `${targetFile}.tmp.${Date.now()}`;
       fs.writeFileSync(tempFile, outputBuffer);
       fs.renameSync(tempFile, targetFile);
       lastSavedAt = Date.now();
+    } catch (err) {
+      console.error("[Kazewa] Error saving session to file:", err);
     } finally {
       isWriting = false;
     }
@@ -182,7 +140,10 @@ export async function useCompactAuthState(
       const data: { [id: string]: T } = {};
       const bucket = keysStore[type] || {};
       for (const id of ids) {
-        const val = bucket[id];
+        let val = bucket[id];
+        if (type === "app-state-sync-key" && val) {
+          val = proto.Message.AppStateSyncKeyData.fromObject(val) as any;
+        }
         if (val !== undefined && val !== null) {
           data[id] = val;
         }
@@ -190,29 +151,27 @@ export async function useCompactAuthState(
       return data;
     },
     set: async (data: { [type: string]: { [id: string]: any } }) => {
-      let changed = false;
-      for (const type of Object.keys(data)) {
-        if (!keysStore[type]) {
-          keysStore[type] = {};
+      for (const category of Object.keys(data)) {
+        if (!keysStore[category]) {
+          keysStore[category] = {};
         }
-        for (const id of Object.keys(data[type])) {
-          const val = data[type][id];
+        for (const id of Object.keys(data[category])) {
+          const val = data[category][id];
           if (val === null || val === undefined) {
-            delete keysStore[type][id];
+            delete keysStore[category][id];
           } else {
-            keysStore[type][id] = val;
+            keysStore[category][id] = val;
           }
-          changed = true;
         }
       }
-      if (changed) {
-        await saveToFile();
-      }
+      await saveToFile();
     },
     clear: async () => {
       keysStore = {};
       if (fs.existsSync(targetFile)) {
-        fs.unlinkSync(targetFile);
+        try {
+          fs.unlinkSync(targetFile);
+        } catch {}
       }
     }
   };
@@ -225,30 +184,12 @@ export async function useCompactAuthState(
       metadata: {
         createdAt: lastSavedAt,
         updatedAt: Date.now(),
-        platform: 'kazewa-portable'
+        platform: "kazewa-string"
       }
     };
     const jsonStr = JSON.stringify(payload, BufferJSON.replacer);
-    const compressed = zlib.gzipSync(Buffer.from(jsonStr, 'utf-8'), { level: 9 });
-    return `KAZE_WA:v1:${compressed.toString('base64')}`;
-  };
-
-  const cleanStaleKeys = async (): Promise<number> => {
-    let removed = 0;
-    if (keysStore['pre-key']) {
-      const ids = Object.keys(keysStore['pre-key']).map(Number).sort((a, b) => a - b);
-      if (ids.length > 30) {
-        const excess = ids.slice(0, ids.length - 30);
-        for (const id of excess) {
-          delete keysStore['pre-key'][id.toString()];
-          removed++;
-        }
-      }
-    }
-    if (removed > 0) {
-      await saveToFile();
-    }
-    return removed;
+    const compressed = zlib.gzipSync(Buffer.from(jsonStr, "utf-8"), { level: 9 });
+    return `KAZE_WA:v1:${compressed.toString("base64")}`;
   };
 
   const getStats = async (): Promise<CompactAuthStats> => {
@@ -256,40 +197,48 @@ export async function useCompactAuthState(
     if (fs.existsSync(targetFile)) {
       size = fs.statSync(targetFile).size;
     }
-    const uncompressedSize = Buffer.byteLength(
-      JSON.stringify({ creds, keys: keysStore }, BufferJSON.replacer)
-    );
-    const ratio = uncompressedSize > 0 ? `${((1 - size / uncompressedSize) * 100).toFixed(1)}%` : '0%';
+    const rawJson = JSON.stringify({ creds, keys: keysStore }, BufferJSON.replacer);
+    const rawSize = Buffer.byteLength(rawJson, "utf-8");
+    const ratio = rawSize > 0 ? `${Math.round((1 - size / rawSize) * 100)}%` : "0%";
 
     let totalKeys = 0;
-    for (const k in keysStore) {
+    for (const k of Object.keys(keysStore)) {
       totalKeys += Object.keys(keysStore[k] || {}).length;
     }
-    const sessionCount = Object.keys(keysStore['session'] || {}).length;
-    const preKeysCount = Object.keys(keysStore['pre-key'] || {}).length;
-    const formatted = size < 1024 ? `${size} B` : `${(size / 1024).toFixed(1)} KB`;
+
+    const preKeys = Object.keys(keysStore["pre-key"] || {}).length;
+    const sessionCount = Object.keys(keysStore["session"] || {}).length;
 
     return {
       filePath: targetFile,
       fileSizeBytes: size,
-      fileSizeFormatted: formatted,
+      fileSizeFormatted: `${(size / 1024).toFixed(1)} KB`,
       keysCount: totalKeys,
       sessionCount,
-      preKeysCount,
+      preKeysCount: preKeys,
       compressionRatio: ratio,
       lastSavedAt
     };
   };
 
-  if (!fs.existsSync(targetFile)) {
-    await saveToFile();
-  }
+  const cleanStaleKeys = async (): Promise<number> => {
+    let removed = 0;
+    if (keysStore["pre-key"]) {
+      const keys = Object.keys(keysStore["pre-key"]);
+      if (keys.length > maxPreKeys) {
+        removed = keys.length - maxPreKeys;
+        const sorted = keys.map(Number).sort((a, b) => a - b);
+        for (const id of sorted.slice(0, removed)) {
+          delete keysStore["pre-key"][id.toString()];
+        }
+        await saveToFile();
+      }
+    }
+    return removed;
+  };
 
   return {
-    state: {
-      creds,
-      keys
-    },
+    state: { creds, keys },
     saveCreds,
     exportSessionString,
     getStats,

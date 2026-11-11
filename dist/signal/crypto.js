@@ -51,11 +51,7 @@ export class KazewaCrypto {
         const hmac = crypto.createHmac('sha256', Buffer.from(identityKeyPair.private));
         hmac.update(Buffer.from(keyPair.public));
         const signature = new Uint8Array(hmac.digest());
-        return {
-            ...keyPair,
-            signature,
-            keyId
-        };
+        return { keyPair, signature, keyId };
     }
     /**
      * Generates a batch of Pre-Keys
