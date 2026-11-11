@@ -1,17 +1,11 @@
-"use strict";
 /**
  * @license MIT
  * Copyright (c) 2026 Michael (KazeDevID)
  * Pure Native Noise Protocol (Noise_XX_25519_AESGCM_SHA256) for WhatsApp Web Gateway
  */
-var __importDefault = (this && this.__importDefault) || function (mod) {
-    return (mod && mod.__esModule) ? mod : { "default": mod };
-};
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.PureNoiseHandler = exports.NOISE_PROLOGUE = void 0;
-const node_crypto_1 = __importDefault(require("node:crypto"));
-exports.NOISE_PROLOGUE = Buffer.from([0x57, 0x41, 0x06, 0x02]); // "WA\x06\x02"
-class PureNoiseHandler {
+import crypto from 'node:crypto';
+export const NOISE_PROLOGUE = Buffer.from([0x57, 0x41, 0x06, 0x02]); // "WA\x06\x02"
+export class PureNoiseHandler {
     ephemeralKeyPair;
     staticKeyPair;
     cipherState;
@@ -20,7 +14,7 @@ class PureNoiseHandler {
         this.ephemeralKeyPair = this.generateX25519KeyPair();
     }
     generateX25519KeyPair() {
-        const { privateKey, publicKey } = node_crypto_1.default.generateKeyPairSync('x25519', {
+        const { privateKey, publicKey } = crypto.generateKeyPairSync('x25519', {
             publicKeyEncoding: { type: 'spki', format: 'der' },
             privateKeyEncoding: { type: 'pkcs8', format: 'der' }
         });
@@ -36,7 +30,7 @@ class PureNoiseHandler {
      * Initializes client hello frame for Noise XX pattern (-> e)
      */
     createClientHello() {
-        return Buffer.concat([exports.NOISE_PROLOGUE, this.ephemeralKeyPair.publicKey]);
+        return Buffer.concat([NOISE_PROLOGUE, this.ephemeralKeyPair.publicKey]);
     }
     /**
      * Decrypts an incoming binary frame using AES-256-GCM
@@ -54,7 +48,7 @@ class PureNoiseHandler {
         const authTag = frame.subarray(frame.length - 16);
         const ciphertext = frame.subarray(0, frame.length - 16);
         try {
-            const decipher = node_crypto_1.default.createDecipheriv('aes-256-gcm', this.cipherState.decKey, iv);
+            const decipher = crypto.createDecipheriv('aes-256-gcm', this.cipherState.decKey, iv);
             decipher.setAuthTag(authTag);
             return Buffer.concat([decipher.update(ciphertext), decipher.final()]);
         }
@@ -73,7 +67,7 @@ class PureNoiseHandler {
         }
         const iv = Buffer.alloc(12);
         iv.writeUInt32BE(this.cipherState.encCounter++, 8);
-        const cipher = node_crypto_1.default.createCipheriv('aes-256-gcm', this.cipherState.encKey, iv);
+        const cipher = crypto.createCipheriv('aes-256-gcm', this.cipherState.encKey, iv);
         const ciphertext = Buffer.concat([cipher.update(plaintext), cipher.final()]);
         const tag = cipher.getAuthTag();
         const fullCipher = Buffer.concat([ciphertext, tag]);
@@ -93,5 +87,4 @@ class PureNoiseHandler {
         };
     }
 }
-exports.PureNoiseHandler = PureNoiseHandler;
 //# sourceMappingURL=index.js.map

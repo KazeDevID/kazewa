@@ -4,7 +4,7 @@
  * KeepAlive & Connection Stability Engine for Kazewa
  * Maintains rock-solid WebSocket connection and Signal protocol state
  */
-import type { AuthenticationCreds, SignalAuthState } from '../types/index.js';
+import type { AuthenticationCreds, SignalKeyStore } from '../types/index.js';
 export interface KeepAliveOptions {
     intervalMs?: number;
     timeoutMs?: number;
@@ -37,7 +37,7 @@ export declare class KeepAliveManager {
      * Signal Pre-Key Health Monitor:
      * Keeps signal pre-key pool replenished so users never encounter "Waiting for this message" decryption failure!
      */
-    startPreKeyReplenisher(creds: AuthenticationCreds, keys: SignalAuthState, onNewKeysUploaded?: (count: number) => void): void;
+    startPreKeyReplenisher(creds: AuthenticationCreds, keys: SignalKeyStore, onNewKeysUploaded?: (count: number) => void): void;
     stop(): void;
 }
 //# sourceMappingURL=keepalive.d.ts.map

@@ -1,12 +1,9 @@
-"use strict";
 /**
  * @license MIT
  * Copyright (c) 2026 Michael (KazeDevID)
  * WhatsApp Web Multi-Device Binary Protocol Constants & Token Dictionaries
  */
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.TOKEN_MAP = exports.SINGLE_BYTE_TOKENS = exports.TAGS = void 0;
-exports.TAGS = {
+export const TAGS = {
     LIST_EMPTY: 0,
     DICTIONARY_0: 236,
     DICTIONARY_1: 237,
@@ -25,7 +22,7 @@ exports.TAGS = {
     NIBBLE_8: 255,
     PACKED_MAX: 127
 };
-exports.SINGLE_BYTE_TOKENS = [
+export const SINGLE_BYTE_TOKENS = [
     '',
     'xmlstreamstart',
     'xmlstreamend',
@@ -111,11 +108,11 @@ exports.SINGLE_BYTE_TOKENS = [
     'buttons',
     'list'
 ];
-exports.TOKEN_MAP = {};
-for (let i = 0; i < exports.SINGLE_BYTE_TOKENS.length; i++) {
-    const token = exports.SINGLE_BYTE_TOKENS[i];
+export const TOKEN_MAP = {};
+for (let i = 0; i < SINGLE_BYTE_TOKENS.length; i++) {
+    const token = SINGLE_BYTE_TOKENS[i];
     if (token) {
-        exports.TOKEN_MAP[token] = { dict: 0, index: i };
+        TOKEN_MAP[token] = { dict: 0, index: i };
     }
 }
 //# sourceMappingURL=constants.js.map

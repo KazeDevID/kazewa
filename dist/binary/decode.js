@@ -1,13 +1,10 @@
-"use strict";
 /**
  * @license MIT
  * Copyright (c) 2026 Michael (KazeDevID)
  * WhatsApp Binary Node Deserialization Engine
  */
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.decodeBinaryNode = decodeBinaryNode;
-const constants_js_1 = require("./constants.js");
-function decodeBinaryNode(buffer) {
+import { SINGLE_BYTE_TOKENS, TAGS } from './constants.js';
+export function decodeBinaryNode(buffer) {
     let index = 0;
     // If first byte is descriptor version (0 or 2), skip it
     if (buffer[0] === 0 || buffer[0] === 2) {
@@ -41,22 +38,22 @@ function decodeBinaryNode(buffer) {
     }
     function readString() {
         const tag = readByte();
-        if (tag < constants_js_1.TAGS.DICTIONARY_0) {
-            return constants_js_1.SINGLE_BYTE_TOKENS[tag] || '';
+        if (tag < TAGS.DICTIONARY_0) {
+            return SINGLE_BYTE_TOKENS[tag] || '';
         }
-        if (tag === constants_js_1.TAGS.BINARY_8) {
+        if (tag === TAGS.BINARY_8) {
             const len = readByte();
             return readBytes(len).toString('utf-8');
         }
-        if (tag === constants_js_1.TAGS.BINARY_20) {
+        if (tag === TAGS.BINARY_20) {
             const len = readInt20();
             return readBytes(len).toString('utf-8');
         }
-        if (tag === constants_js_1.TAGS.BINARY_32) {
+        if (tag === TAGS.BINARY_32) {
             const len = readInt32();
             return readBytes(len).toString('utf-8');
         }
-        if (tag === constants_js_1.TAGS.JID_PAIR) {
+        if (tag === TAGS.JID_PAIR) {
             const user = readString();
             const server = readString();
             return `${user}@${server}`;
@@ -64,11 +61,11 @@ function decodeBinaryNode(buffer) {
         return '';
     }
     function readListSize(tag) {
-        if (tag === constants_js_1.TAGS.LIST_EMPTY)
+        if (tag === TAGS.LIST_EMPTY)
             return 0;
-        if (tag === constants_js_1.TAGS.LIST_8)
+        if (tag === TAGS.LIST_8)
             return readByte();
-        if (tag === constants_js_1.TAGS.LIST_16)
+        if (tag === TAGS.LIST_16)
             return readInt16();
         return 0;
     }
@@ -90,7 +87,7 @@ function decodeBinaryNode(buffer) {
         let content = undefined;
         if (remaining === 1) {
             const nextTag = buffer[index];
-            if (nextTag === constants_js_1.TAGS.LIST_EMPTY || nextTag === constants_js_1.TAGS.LIST_8 || nextTag === constants_js_1.TAGS.LIST_16) {
+            if (nextTag === TAGS.LIST_EMPTY || nextTag === TAGS.LIST_8 || nextTag === TAGS.LIST_16) {
                 const childTag = readByte();
                 const count = readListSize(childTag);
                 const children = [];
@@ -99,17 +96,17 @@ function decodeBinaryNode(buffer) {
                 }
                 content = children;
             }
-            else if (nextTag === constants_js_1.TAGS.BINARY_8) {
+            else if (nextTag === TAGS.BINARY_8) {
                 readByte();
                 const len = readByte();
                 content = readBytes(len);
             }
-            else if (nextTag === constants_js_1.TAGS.BINARY_20) {
+            else if (nextTag === TAGS.BINARY_20) {
                 readByte();
                 const len = readInt20();
                 content = readBytes(len);
             }
-            else if (nextTag === constants_js_1.TAGS.BINARY_32) {
+            else if (nextTag === TAGS.BINARY_32) {
                 readByte();
                 const len = readInt32();
                 content = readBytes(len);

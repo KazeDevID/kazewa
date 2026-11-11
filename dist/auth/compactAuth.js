@@ -1,142 +1,71 @@
-"use strict";
 /**
  * @license MIT
  * Copyright (c) 2026 Michael (KazeDevID)
- * Pure Native Ultra-Compact Session & Auth State Engine for Kazewa
- * 85-95% smaller than standard Baileys multi-file auth with zero external dependencies
+ * Kazewa Compact Single-File Auth Engine
+ * Replaces Baileys multi-file folder (100-500 files) with a single atomic compressed .kaze file
  */
-var __importDefault = (this && this.__importDefault) || function (mod) {
-    return (mod && mod.__esModule) ? mod : { "default": mod };
-};
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.generateCurve25519KeyPair = generateCurve25519KeyPair;
-exports.initAuthCreds = initAuthCreds;
-exports.useCompactAuthState = useCompactAuthState;
-const node_fs_1 = __importDefault(require("node:fs"));
-const node_path_1 = __importDefault(require("node:path"));
-const node_zlib_1 = __importDefault(require("node:zlib"));
-const node_crypto_1 = __importDefault(require("node:crypto"));
-function generateCurve25519KeyPair() {
-    const { privateKey, publicKey } = node_crypto_1.default.generateKeyPairSync('x25519', {
-        publicKeyEncoding: { type: 'spki', format: 'der' },
-        privateKeyEncoding: { type: 'pkcs8', format: 'der' }
-    });
-    return {
-        private: privateKey.subarray(privateKey.length - 32),
-        public: publicKey.subarray(publicKey.length - 32)
-    };
-}
+import fs from 'node:fs';
+import path from 'node:path';
+import zlib from 'node:zlib';
+import { BufferJSON, initAuthCreds as baileysInitAuthCreds, proto } from '@whiskeysockets/baileys';
+export const initAuthCreds = baileysInitAuthCreds;
 /**
- * Pure Native Credential Initialization using node:crypto Curve25519
+ * High-performance, ultra-compact single-file WhatsApp auth state.
+ * Stores all credentials and Signal protocol keys inside a single compressed .kaze file.
  */
-function initAuthCreds() {
-    const identityKeyPair = generateCurve25519KeyPair();
-    const preKeyPair = generateCurve25519KeyPair();
-    const signature = node_crypto_1.default
-        .createHmac('sha256', identityKeyPair.private)
-        .update(preKeyPair.public)
-        .digest();
-    return {
-        noiseKey: generateCurve25519KeyPair(),
-        pairingEphemeralKeyPair: generateCurve25519KeyPair(),
-        signedIdentityKey: identityKeyPair,
-        signedPreKey: {
-            keyPair: preKeyPair,
-            signature,
-            keyId: 1
-        },
-        registrationId: node_crypto_1.default.randomInt(1000, 9999),
-        advSecretKey: node_crypto_1.default.randomBytes(32).toString('base64'),
-        processedHistoryMessages: [],
-        nextPreKeyId: 2,
-        firstUnuploadedPreKeyId: 2,
-        accountSyncCounter: 0,
-        accountSettings: {
-            unarchiveChats: false
-        },
-        deviceId: node_crypto_1.default.randomBytes(16).toString('hex'),
-        phoneId: node_crypto_1.default.randomUUID(),
-        identityId: node_crypto_1.default.randomBytes(20),
-        registered: false,
-        backupToken: node_crypto_1.default.randomBytes(20),
-        registration: {
-            platform: 'android'
-        }
-    };
-}
-/**
- * Buffer replacer for JSON serialization
- */
-function bufferReplacer(_key, value) {
-    if (value instanceof Uint8Array || Buffer.isBuffer(value)) {
-        return {
-            type: 'Buffer',
-            data: Buffer.from(value).toString('base64')
-        };
-    }
-    return value;
-}
-/**
- * Buffer reviver for JSON deserialization
- */
-function bufferReviver(_key, value) {
-    if (value && typeof value === 'object' && value.type === 'Buffer' && typeof value.data === 'string') {
-        return Buffer.from(value.data, 'base64');
-    }
-    return value;
-}
-/**
- * High-performance, ultra-compact single-file WhatsApp auth state
- * Replaces Baileys 100+ multi-file folder with a single atomic compressed binary/JSON file
- */
-async function useCompactAuthState(filePathOrDir, options = {}) {
+export async function useCompactAuthState(filePathOrDir, options = {}) {
     const compress = options.compress !== false;
     const maxPreKeys = options.maxStoredPreKeys || 50;
     // Resolve target file path
-    let targetFile = node_path_1.default.resolve(filePathOrDir);
-    if (node_fs_1.default.existsSync(targetFile) && node_fs_1.default.statSync(targetFile).isDirectory()) {
-        targetFile = node_path_1.default.join(targetFile, 'kazewa_session.kaze');
+    let targetFile = path.resolve(filePathOrDir);
+    if (fs.existsSync(targetFile) && fs.statSync(targetFile).isDirectory()) {
+        targetFile = path.join(targetFile, 'session.kaze');
     }
     else if (!targetFile.endsWith('.kaze') && !targetFile.endsWith('.json')) {
         targetFile = `${targetFile}.kaze`;
     }
     // Ensure parent directory exists
-    const parentDir = node_path_1.default.dirname(targetFile);
-    if (!node_fs_1.default.existsSync(parentDir)) {
-        node_fs_1.default.mkdirSync(parentDir, { recursive: true });
+    const parentDir = path.dirname(targetFile);
+    if (!fs.existsSync(parentDir)) {
+        fs.mkdirSync(parentDir, { recursive: true });
     }
     let creds;
     let keysStore = {};
     let lastSavedAt = Date.now();
     // Load existing session if present
-    if (node_fs_1.default.existsSync(targetFile)) {
+    if (fs.existsSync(targetFile)) {
         try {
-            const rawBuffer = node_fs_1.default.readFileSync(targetFile);
+            const rawBuffer = fs.readFileSync(targetFile);
             let jsonText;
-            // Detect if compressed with gzip
+            // Detect if compressed with gzip (0x1f 0x8b)
             if (rawBuffer.length >= 2 && rawBuffer[0] === 0x1f && rawBuffer[1] === 0x8b) {
-                jsonText = node_zlib_1.default.gunzipSync(rawBuffer).toString('utf-8');
+                jsonText = zlib.gunzipSync(rawBuffer).toString('utf-8');
             }
             else {
                 jsonText = rawBuffer.toString('utf-8');
             }
-            const parsed = JSON.parse(jsonText, bufferReviver);
+            const parsed = JSON.parse(jsonText, BufferJSON.reviver);
             creds = parsed.creds || initAuthCreds();
             keysStore = parsed.keys || {};
             lastSavedAt = parsed.metadata?.updatedAt || Date.now();
         }
         catch (err) {
-            console.warn(`[Kazewa] Could not parse existing session file at ${targetFile}, generating fresh session:`, err);
+            console.warn(`[Kazewa] Could not parse existing session at ${targetFile}, creating fresh session:`, err);
             creds = initAuthCreds();
         }
     }
     else {
         creds = initAuthCreds();
     }
-    // Atomic write safeguard: writes to .tmp then renames to prevent corruption
+    // Atomic file save routine
+    let isWriting = false;
     const saveToFile = async () => {
+        if (isWriting) {
+            await new Promise((r) => setTimeout(r, 10));
+        }
+        isWriting = true;
         try {
-            // Prune consumed prekeys if beyond threshold
+            // Prune pre-keys if beyond threshold to keep file small
             if (keysStore['pre-key']) {
                 const preKeyIds = Object.keys(keysStore['pre-key']).map(Number).sort((a, b) => a - b);
                 if (preKeyIds.length > maxPreKeys) {
@@ -156,35 +85,37 @@ async function useCompactAuthState(filePathOrDir, options = {}) {
                     platform: 'kazewa-engine-v1'
                 }
             };
-            const jsonStr = JSON.stringify(payload, bufferReplacer);
+            const jsonStr = JSON.stringify(payload, BufferJSON.replacer);
             let outputBuffer;
             if (compress) {
-                outputBuffer = node_zlib_1.default.gzipSync(Buffer.from(jsonStr, 'utf-8'), { level: 9 });
+                outputBuffer = zlib.gzipSync(Buffer.from(jsonStr, 'utf-8'), { level: 9 });
             }
             else {
                 outputBuffer = Buffer.from(jsonStr, 'utf-8');
             }
             const tempFile = `${targetFile}.tmp.${Date.now()}`;
-            node_fs_1.default.writeFileSync(tempFile, outputBuffer);
-            node_fs_1.default.renameSync(tempFile, targetFile);
+            fs.writeFileSync(tempFile, outputBuffer);
+            fs.renameSync(tempFile, targetFile);
             lastSavedAt = Date.now();
         }
-        catch (error) {
-            console.error('[Kazewa] Error during atomic session write:', error);
-            throw error;
+        finally {
+            isWriting = false;
         }
     };
     const saveCreds = async () => {
         await saveToFile();
     };
-    // Signal Auth State interface
     const keys = {
         get: async (type, ids) => {
             const data = {};
             const bucket = keysStore[type] || {};
             for (const id of ids) {
-                if (bucket[id]) {
-                    data[id] = bucket[id];
+                let value = bucket[id];
+                if (type === 'app-state-sync-key' && value) {
+                    value = proto.Message.AppStateSyncKeyData.fromObject(value);
+                }
+                if (value !== undefined && value !== null) {
+                    data[id] = value;
                 }
             }
             return data;
@@ -212,8 +143,8 @@ async function useCompactAuthState(filePathOrDir, options = {}) {
         },
         clear: async () => {
             keysStore = {};
-            if (node_fs_1.default.existsSync(targetFile)) {
-                node_fs_1.default.unlinkSync(targetFile);
+            if (fs.existsSync(targetFile)) {
+                fs.unlinkSync(targetFile);
             }
         }
     };
@@ -228,8 +159,8 @@ async function useCompactAuthState(filePathOrDir, options = {}) {
                 platform: 'kazewa-portable'
             }
         };
-        const jsonStr = JSON.stringify(payload, bufferReplacer);
-        const compressed = node_zlib_1.default.gzipSync(Buffer.from(jsonStr, 'utf-8'), { level: 9 });
+        const jsonStr = JSON.stringify(payload, BufferJSON.replacer);
+        const compressed = zlib.gzipSync(Buffer.from(jsonStr, 'utf-8'), { level: 9 });
         return `KAZE_WA:v1:${compressed.toString('base64')}`;
     };
     const cleanStaleKeys = async () => {
@@ -251,10 +182,10 @@ async function useCompactAuthState(filePathOrDir, options = {}) {
     };
     const getStats = async () => {
         let size = 0;
-        if (node_fs_1.default.existsSync(targetFile)) {
-            size = node_fs_1.default.statSync(targetFile).size;
+        if (fs.existsSync(targetFile)) {
+            size = fs.statSync(targetFile).size;
         }
-        const uncompressedSize = Buffer.byteLength(JSON.stringify({ creds, keys: keysStore }, bufferReplacer));
+        const uncompressedSize = Buffer.byteLength(JSON.stringify({ creds, keys: keysStore }, BufferJSON.replacer));
         const ratio = uncompressedSize > 0 ? `${((1 - size / uncompressedSize) * 100).toFixed(1)}%` : '0%';
         let totalKeys = 0;
         for (const k in keysStore) {
@@ -274,8 +205,8 @@ async function useCompactAuthState(filePathOrDir, options = {}) {
             lastSavedAt
         };
     };
-    // Perform initial save if file didn't exist
-    if (!node_fs_1.default.existsSync(targetFile)) {
+    // Perform initial save if file did not exist
+    if (!fs.existsSync(targetFile)) {
         await saveToFile();
     }
     return {

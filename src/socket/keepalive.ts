@@ -6,7 +6,7 @@
  */
 
 import { KazewaCrypto } from '../signal/crypto.js';
-import type { AuthenticationCreds, SignalAuthState } from '../types/index.js';
+import type { AuthenticationCreds, SignalKeyStore } from '../types/index.js';
 
 export interface KeepAliveOptions {
   intervalMs?: number;
@@ -94,7 +94,7 @@ export class KeepAliveManager {
    */
   public startPreKeyReplenisher(
     creds: AuthenticationCreds,
-    keys: SignalAuthState,
+    keys: SignalKeyStore,
     onNewKeysUploaded?: (count: number) => void
   ): void {
     if (this.preKeyCheckTimer) {

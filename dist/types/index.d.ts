@@ -3,7 +3,13 @@
  * Copyright (c) 2026 Michael (KazeDevID)
  * Kazewa WhatsApp Web Bot API & Protocol Library
  */
-export type DisconnectReason = 'loggedOut' | 'connectionClosed' | 'connectionLost' | 'connectionReplaced' | 'timedOut' | 'badSession' | 'restartRequired' | 'pairingTimeout';
+import type { AuthenticationCreds as BaileysAuthenticationCreds, AuthenticationState as BaileysAuthenticationState, SignalAuthState as BaileysSignalAuthState, SignalKeyStore as BaileysSignalKeyStore, ConnectionState as BaileysConnectionState, DisconnectReason as BaileysDisconnectReason } from '@whiskeysockets/baileys';
+export type DisconnectReason = BaileysDisconnectReason | string | number;
+export type AuthenticationCreds = BaileysAuthenticationCreds;
+export type AuthenticationState = BaileysAuthenticationState;
+export type SignalAuthState = BaileysSignalAuthState;
+export type SignalKeyStore = BaileysSignalKeyStore;
+export type ConnectionState = BaileysConnectionState;
 export interface KeyPair {
     public: Uint8Array;
     private: Uint8Array;
@@ -11,60 +17,6 @@ export interface KeyPair {
 export interface SignedKeyPair extends KeyPair {
     signature: Uint8Array;
     keyId: number;
-}
-export interface AuthenticationCreds {
-    noiseKey: KeyPair;
-    pairingEphemeralKeyPair: KeyPair;
-    signedIdentityKey: KeyPair;
-    signedPreKey: SignedKeyPair;
-    registrationId: number;
-    advSecretKey: string;
-    processedHistoryMessages: string[];
-    nextPreKeyId: number;
-    firstUnuploadedPreKeyId: number;
-    accountSyncCounter: number;
-    accountSettings: {
-        unarchiveChats: boolean;
-    };
-    deviceId: string;
-    phoneId: string;
-    identityId: Buffer;
-    registered: boolean;
-    pairingCode?: string;
-    backupToken: Buffer;
-    registration: {
-        phoneNumber?: string;
-        method?: 'qr' | 'code';
-        pairedAt?: number;
-        platform?: string;
-    };
-    me?: {
-        id: string;
-        name?: string;
-        lid?: string;
-    };
-    signalIdentities?: Array<{
-        identifier: {
-            name: string;
-            deviceId: number;
-        };
-        identifierKey: Uint8Array;
-    }>;
-}
-export interface SignalAuthState {
-    get: <T>(type: string, ids: string[]) => Promise<{
-        [id: string]: T;
-    }>;
-    set: (data: {
-        [type: string]: {
-            [id: string]: any;
-        };
-    }) => Promise<void>;
-    clear?: () => Promise<void>;
-}
-export interface AuthenticationState {
-    creds: AuthenticationCreds;
-    keys: SignalAuthState;
 }
 export interface CompactAuthStats {
     filePath?: string;
@@ -83,18 +35,18 @@ export interface CompactAuthResult {
     getStats: () => Promise<CompactAuthStats>;
     cleanStaleKeys: () => Promise<number>;
 }
-export type ConnectionState = 'close' | 'connecting' | 'open';
 export interface ConnectionUpdate {
     connection?: ConnectionState;
     lastDisconnect?: {
         error?: Error;
         date?: Date;
-        reason?: DisconnectReason;
+        reason?: any;
     };
     qr?: string;
     qrDataUrl?: string;
     pairingCode?: string;
     isNewLogin?: boolean;
+    receivedPendingNotifications?: boolean;
 }
 export interface MessageKey {
     remoteJid: string;
@@ -233,7 +185,7 @@ export type EventMap = {
     'connection.update': (update: ConnectionUpdate) => void;
     'creds.update': (creds: AuthenticationCreds) => void;
     'messages.upsert': (data: {
-        messages: WebMessageInfo[];
+        messages: any[];
         type: 'notify' | 'append';
     }) => void;
     'messages.update': (data: {

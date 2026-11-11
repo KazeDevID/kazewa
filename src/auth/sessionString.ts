@@ -5,25 +5,14 @@
  */
 
 import zlib from 'node:zlib';
-import type { AuthenticationCreds, AuthenticationState } from '../types/index.js';
-import { initAuthCreds } from './compactAuth.js';
-
-function bufferReviver(_key: string, value: any): any {
-  if (value && typeof value === 'object' && value.type === 'Buffer' && typeof value.data === 'string') {
-    return Buffer.from(value.data, 'base64');
-  }
-  return value;
-}
-
-function bufferReplacer(_key: string, value: any): any {
-  if (value instanceof Uint8Array || Buffer.isBuffer(value)) {
-    return {
-      type: 'Buffer',
-      data: Buffer.from(value).toString('base64')
-    };
-  }
-  return value;
-}
+import {
+  BufferJSON,
+  initAuthCreds,
+  proto,
+  type AuthenticationCreds,
+  type AuthenticationState,
+  type SignalKeyStore
+} from '@whiskeysockets/baileys';
 
 export interface SessionStringAuthResult {
   state: AuthenticationState;
@@ -46,7 +35,7 @@ export async function useSessionStringAuthState(
       const base64Data = sessionString.replace('KAZE_WA:v1:', '');
       const compressed = Buffer.from(base64Data, 'base64');
       const jsonText = zlib.gunzipSync(compressed).toString('utf-8');
-      const parsed = JSON.parse(jsonText, bufferReviver);
+      const parsed = JSON.parse(jsonText, BufferJSON.reviver);
       creds = parsed.creds || creds;
       keysStore = parsed.keys || {};
     } catch (err) {
@@ -64,7 +53,7 @@ export async function useSessionStringAuthState(
         platform: 'kazewa-string'
       }
     };
-    const jsonStr = JSON.stringify(payload, bufferReplacer);
+    const jsonStr = JSON.stringify(payload, BufferJSON.replacer);
     const compressed = zlib.gzipSync(Buffer.from(jsonStr, 'utf-8'), { level: 9 });
     return `KAZE_WA:v1:${compressed.toString('base64')}`;
   };
@@ -80,13 +69,17 @@ export async function useSessionStringAuthState(
     await triggerUpdate();
   };
 
-  const keys = {
+  const keys: SignalKeyStore = {
     get: async <T>(type: string, ids: string[]): Promise<{ [id: string]: T }> => {
       const data: { [id: string]: T } = {};
       const bucket = keysStore[type] || {};
       for (const id of ids) {
-        if (bucket[id]) {
-          data[id] = bucket[id];
+        let value = bucket[id];
+        if (type === 'app-state-sync-key' && value) {
+          value = proto.Message.AppStateSyncKeyData.fromObject(value);
+        }
+        if (value !== undefined && value !== null) {
+          data[id] = value;
         }
       }
       return data;
@@ -103,6 +96,10 @@ export async function useSessionStringAuthState(
           }
         }
       }
+      await triggerUpdate();
+    },
+    clear: async () => {
+      keysStore = {};
       await triggerUpdate();
     }
   };

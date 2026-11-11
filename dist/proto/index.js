@@ -1,12 +1,9 @@
-"use strict";
 /**
  * @license MIT
  * Copyright (c) 2026 Michael (KazeDevID)
  * Protobuf Definitions & Helper Factories for WhatsApp Web protocol
  */
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.proto = void 0;
-var proto;
+export var proto;
 (function (proto) {
     proto.Message = {
         fromObject(obj) {
@@ -34,5 +31,5 @@ var proto;
             return { ...obj };
         }
     };
-})(proto || (exports.proto = proto = {}));
+})(proto || (proto = {}));
 //# sourceMappingURL=index.js.map

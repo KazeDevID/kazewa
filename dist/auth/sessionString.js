@@ -1,43 +1,22 @@
-"use strict";
 /**
  * @license MIT
  * Copyright (c) 2026 Michael (KazeDevID)
  * Zero-Disk Session String Auth Engine for Serverless & Cloud Deployments
  */
-var __importDefault = (this && this.__importDefault) || function (mod) {
-    return (mod && mod.__esModule) ? mod : { "default": mod };
-};
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.useSessionStringAuthState = useSessionStringAuthState;
-const node_zlib_1 = __importDefault(require("node:zlib"));
-const compactAuth_js_1 = require("./compactAuth.js");
-function bufferReviver(_key, value) {
-    if (value && typeof value === 'object' && value.type === 'Buffer' && typeof value.data === 'string') {
-        return Buffer.from(value.data, 'base64');
-    }
-    return value;
-}
-function bufferReplacer(_key, value) {
-    if (value instanceof Uint8Array || Buffer.isBuffer(value)) {
-        return {
-            type: 'Buffer',
-            data: Buffer.from(value).toString('base64')
-        };
-    }
-    return value;
-}
+import zlib from 'node:zlib';
+import { BufferJSON, initAuthCreds, proto } from '@whiskeysockets/baileys';
 /**
  * Load WhatsApp session directly from a single Portable Session String (e.g. from process.env.SESSION_ID)
  */
-async function useSessionStringAuthState(sessionString, onUpdate) {
-    let creds = (0, compactAuth_js_1.initAuthCreds)();
+export async function useSessionStringAuthState(sessionString, onUpdate) {
+    let creds = initAuthCreds();
     let keysStore = {};
     if (sessionString && sessionString.startsWith('KAZE_WA:v1:')) {
         try {
             const base64Data = sessionString.replace('KAZE_WA:v1:', '');
             const compressed = Buffer.from(base64Data, 'base64');
-            const jsonText = node_zlib_1.default.gunzipSync(compressed).toString('utf-8');
-            const parsed = JSON.parse(jsonText, bufferReviver);
+            const jsonText = zlib.gunzipSync(compressed).toString('utf-8');
+            const parsed = JSON.parse(jsonText, BufferJSON.reviver);
             creds = parsed.creds || creds;
             keysStore = parsed.keys || {};
         }
@@ -55,8 +34,8 @@ async function useSessionStringAuthState(sessionString, onUpdate) {
                 platform: 'kazewa-string'
             }
         };
-        const jsonStr = JSON.stringify(payload, bufferReplacer);
-        const compressed = node_zlib_1.default.gzipSync(Buffer.from(jsonStr, 'utf-8'), { level: 9 });
+        const jsonStr = JSON.stringify(payload, BufferJSON.replacer);
+        const compressed = zlib.gzipSync(Buffer.from(jsonStr, 'utf-8'), { level: 9 });
         return `KAZE_WA:v1:${compressed.toString('base64')}`;
     };
     const triggerUpdate = async () => {
@@ -73,8 +52,12 @@ async function useSessionStringAuthState(sessionString, onUpdate) {
             const data = {};
             const bucket = keysStore[type] || {};
             for (const id of ids) {
-                if (bucket[id]) {
-                    data[id] = bucket[id];
+                let value = bucket[id];
+                if (type === 'app-state-sync-key' && value) {
+                    value = proto.Message.AppStateSyncKeyData.fromObject(value);
+                }
+                if (value !== undefined && value !== null) {
+                    data[id] = value;
                 }
             }
             return data;
@@ -93,6 +76,10 @@ async function useSessionStringAuthState(sessionString, onUpdate) {
                     }
                 }
             }
+            await triggerUpdate();
+        },
+        clear: async () => {
+            keysStore = {};
             await triggerUpdate();
         }
     };

@@ -1,13 +1,10 @@
-"use strict";
 /**
  * @license MIT
  * Copyright (c) 2026 Michael (KazeDevID)
  * Proto Message Builder Helpers (Enhanced like @itsliaaa/baileys)
  * Simplifies constructing complex WhatsApp messages, interactive buttons, carousels & stickers
  */
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.MessageBuilder = void 0;
-class MessageBuilder {
+export class MessageBuilder {
     /**
      * Builds standardized ContextInfo metadata (mentions, quoted message, external ad reply, AI badge)
      */
@@ -264,5 +261,4 @@ class MessageBuilder {
         return exif;
     }
 }
-exports.MessageBuilder = MessageBuilder;
 //# sourceMappingURL=index.js.map

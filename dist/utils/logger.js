@@ -1,11 +1,8 @@
-"use strict";
 /**
  * @license MIT
  * Copyright (c) 2026 Michael (KazeDevID)
  * Lightweight zero-dependency Logger for Kazewa
  */
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.defaultLogger = exports.KazewaLogger = void 0;
 const LEVEL_PRIORITY = {
     trace: 0,
     debug: 1,
@@ -14,7 +11,7 @@ const LEVEL_PRIORITY = {
     error: 4,
     silent: 5
 };
-class KazewaLogger {
+export class KazewaLogger {
     level = 'info';
     prefix = '[kazewa]';
     constructor(level = 'info', prefix = '[kazewa]') {
@@ -56,6 +53,5 @@ class KazewaLogger {
         }
     }
 }
-exports.KazewaLogger = KazewaLogger;
-exports.defaultLogger = new KazewaLogger('info');
+export const defaultLogger = new KazewaLogger('info');
 //# sourceMappingURL=logger.js.map

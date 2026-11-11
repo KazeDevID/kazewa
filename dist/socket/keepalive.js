@@ -1,14 +1,11 @@
-"use strict";
 /**
  * @license MIT
  * Copyright (c) 2026 Michael (KazeDevID)
  * KeepAlive & Connection Stability Engine for Kazewa
  * Maintains rock-solid WebSocket connection and Signal protocol state
  */
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.KeepAliveManager = void 0;
-const crypto_js_1 = require("../signal/crypto.js");
-class KeepAliveManager {
+import { KazewaCrypto } from '../signal/crypto.js';
+export class KeepAliveManager {
     intervalMs;
     timeoutMs;
     maxBackoffMs;
@@ -89,7 +86,7 @@ class KeepAliveManager {
                 // If available pre-keys drop below 20, generate a fresh batch of 50
                 if (count < 20) {
                     const batchSize = 50;
-                    const newKeys = crypto_js_1.KazewaCrypto.generatePreKeys(nextId, batchSize);
+                    const newKeys = KazewaCrypto.generatePreKeys(nextId, batchSize);
                     await keys.set({ 'pre-key': newKeys });
                     creds.nextPreKeyId = nextId + batchSize;
                     if (onNewKeysUploaded) {
@@ -117,5 +114,4 @@ class KeepAliveManager {
         }
     }
 }
-exports.KeepAliveManager = KeepAliveManager;
 //# sourceMappingURL=keepalive.js.map
