@@ -1,7 +1,8 @@
 /**
  * @license MIT
  * Copyright (c) 2026 Michael (KazeDevID)
- * Cryptographic engine for Kazewa Signal & Noise Handshake
+ * Pure Native Cryptographic Engine for Kazewa Signal & WhatsApp Handshake
+ * Completely standalone using Node.js native `node:crypto`
  */
 
 import crypto from 'node:crypto';
@@ -9,16 +10,42 @@ import type { KeyPair, SignedKeyPair } from '../types/index.js';
 
 export class KazewaCrypto {
   /**
-   * Generates Curve25519 (X25519) key pair for Noise & Signal protocol
+   * Computes Curve25519 (X25519) Diffie-Hellman shared secret using native node:crypto
+   */
+  static x25519SharedKey(privateKey32: Buffer | Uint8Array, publicKey32: Buffer | Uint8Array): Buffer {
+    let priv = Buffer.from(privateKey32);
+    let pub = Buffer.from(publicKey32);
+
+    if (priv.length === 33) priv = priv.subarray(1);
+    if (pub.length === 33) pub = pub.subarray(1);
+
+    const privDer = Buffer.concat([
+      Buffer.from('302e020100300506032b656e04220420', 'hex'),
+      priv
+    ]);
+    const pubDer = Buffer.concat([
+      Buffer.from('302a300506032b656e032100', 'hex'),
+      pub
+    ]);
+
+    const privKey = crypto.createPrivateKey({ key: privDer, format: 'der', type: 'pkcs8' });
+    const pubKey = crypto.createPublicKey({ key: pubDer, format: 'der', type: 'spki' });
+
+    return crypto.diffieHellman({ privateKey: privKey, publicKey: pubKey });
+  }
+
+  /**
+   * Generates Curve25519 (X25519) key pair
    */
   static generateKeyPair(): KeyPair {
     const { privateKey, publicKey } = crypto.generateKeyPairSync('x25519', {
       publicKeyEncoding: { type: 'spki', format: 'der' },
       privateKeyEncoding: { type: 'pkcs8', format: 'der' }
     });
-    // Extract raw 32-byte keys from DER encoding
+
     const privRaw = privateKey.subarray(privateKey.length - 32);
     const pubRaw = publicKey.subarray(publicKey.length - 32);
+
     return {
       private: new Uint8Array(privRaw),
       public: new Uint8Array(pubRaw)
@@ -30,7 +57,6 @@ export class KazewaCrypto {
    */
   static generateSignedPreKey(identityKeyPair: KeyPair, keyId: number): SignedKeyPair {
     const keyPair = this.generateKeyPair();
-    // Sign public key with identity key using HMAC-SHA256 or Edwards curve
     const hmac = crypto.createHmac('sha256', Buffer.from(identityKeyPair.private));
     hmac.update(Buffer.from(keyPair.public));
     const signature = new Uint8Array(hmac.digest());
@@ -43,7 +69,7 @@ export class KazewaCrypto {
   }
 
   /**
-   * Generates a batch of Pre-Keys with automatic IDs
+   * Generates a batch of Pre-Keys
    */
   static generatePreKeys(startId: number, count: number): { [keyId: string]: KeyPair } {
     const keys: { [keyId: string]: KeyPair } = {};
@@ -82,7 +108,7 @@ export class KazewaCrypto {
     additionalData?: Buffer | Uint8Array
   ): { ciphertext: Buffer; tag: Buffer } {
     const cipher = crypto.createCipheriv('aes-256-gcm', Buffer.from(key), Buffer.from(iv));
-    if (additionalData) {
+    if (additionalData && additionalData.length > 0) {
       cipher.setAAD(Buffer.from(additionalData));
     }
     const ciphertext = Buffer.concat([cipher.update(Buffer.from(plaintext)), cipher.final()]);
@@ -102,7 +128,7 @@ export class KazewaCrypto {
   ): Buffer {
     const decipher = crypto.createDecipheriv('aes-256-gcm', Buffer.from(key), Buffer.from(iv));
     decipher.setAuthTag(Buffer.from(tag));
-    if (additionalData) {
+    if (additionalData && additionalData.length > 0) {
       decipher.setAAD(Buffer.from(additionalData));
     }
     return Buffer.concat([decipher.update(Buffer.from(ciphertext)), decipher.final()]);
@@ -128,32 +154,5 @@ export class KazewaCrypto {
    */
   static randomBytes(length: number): Buffer {
     return crypto.randomBytes(length);
-  }
-
-  /**
-   * Generate 8-character Pairing Code in WhatsApp Web format (e.g. "ABCD-EFGH")
-   */
-  static generatePairingCodeFromEntropy(entropy?: Buffer): string {
-    const bytes = entropy || crypto.randomBytes(5);
-    // WhatsApp pairing code alphabet: 23456789ABCDEFGHJKLMNPQRSTUVWXYZ (32 unambiguous chars)
-    const alphabet = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
-    let code = '';
-    let val = 0;
-    let bits = 0;
-
-    for (const b of bytes) {
-      val = (val << 8) | b;
-      bits += 8;
-      while (bits >= 5 && code.length < 8) {
-        bits -= 5;
-        const index = (val >> bits) & 31;
-        code += alphabet[index];
-      }
-    }
-    while (code.length < 8) {
-      code += alphabet[crypto.randomInt(0, alphabet.length)];
-    }
-
-    return `${code.slice(0, 4)}-${code.slice(4, 8)}`;
   }
 }

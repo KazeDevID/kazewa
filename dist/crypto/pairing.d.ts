@@ -2,6 +2,7 @@
  * @license MIT
  * Copyright (c) 2026 Michael (KazeDevID)
  * Pure Native WhatsApp Pairing Code Cryptographic Engine
+ * Implements full Stage 1 (companion_hello) and Stage 2 (companion_finish) handshake
  */
 export declare const CROCKFORD_CHARACTERS = "123456789ABCDEFGHJKLMNPQRSTVWXYZ";
 /**
@@ -33,4 +34,24 @@ export declare function generatePairingWrappedKey(pairingCode: string, companion
  * Deciphers phone's primary ephemeral public key received during approval
  */
 export declare function decipherLinkPublicKey(data: Buffer, pairingCode: string): Buffer;
+/**
+ * Resolves companion platform ID for WhatsApp Web
+ */
+export declare function getCompanionPlatformId(browser?: [string, string, string]): string;
+/**
+ * Complete Stage 2 companion registration cryptographic key exchange.
+ * Deciphers phone's primary ephemeral public key, computes Diffie-Hellman shared key,
+ * encrypts the key bundle with AES-256-GCM, and derives the companion advSecretKey.
+ */
+export declare function buildPairingStage2KeyBundle(params: {
+    pairingCode: string;
+    pairingEphemeralPriv: Buffer;
+    companionIdentityPub: Buffer;
+    companionIdentityPriv: Buffer;
+    primaryEphemeralWrapped: Buffer;
+    primaryIdentityPublicKey: Buffer;
+}): {
+    encryptedPayload: Buffer;
+    advSecretKey: string;
+};
 //# sourceMappingURL=pairing.d.ts.map

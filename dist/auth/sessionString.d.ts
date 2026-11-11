@@ -3,7 +3,7 @@
  * Copyright (c) 2026 Michael (KazeDevID)
  * Zero-Disk Session String Auth Engine for Serverless & Cloud Deployments
  */
-import { type AuthenticationState } from '@whiskeysockets/baileys';
+import type { AuthenticationState } from '../types/index.js';
 export interface SessionStringAuthResult {
     state: AuthenticationState;
     saveCreds: () => Promise<void>;

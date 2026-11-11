@@ -1,9 +1,9 @@
 /**
  * @license MIT
  * Copyright (c) 2026 Michael (KazeDevID)
- * Baileys-compatible multi-file auth state adapter for seamless migration
+ * Multi-file auth state adapter for traditional directory storage
  */
-import { type AuthenticationState } from '@whiskeysockets/baileys';
+import type { AuthenticationState } from '../types/index.js';
 export declare function useMultiFileAuthState(folderPath: string): Promise<{
     state: AuthenticationState;
     saveCreds: () => Promise<void>;

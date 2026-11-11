@@ -5,14 +5,8 @@
  */
 
 import zlib from 'node:zlib';
-import {
-  BufferJSON,
-  initAuthCreds,
-  proto,
-  type AuthenticationCreds,
-  type AuthenticationState,
-  type SignalKeyStore
-} from '@whiskeysockets/baileys';
+import type { AuthenticationCreds, AuthenticationState, SignalKeyStore } from '../types/index.js';
+import { BufferJSON, initAuthCreds } from './compactAuth.js';
 
 export interface SessionStringAuthResult {
   state: AuthenticationState;
@@ -74,12 +68,9 @@ export async function useSessionStringAuthState(
       const data: { [id: string]: T } = {};
       const bucket = keysStore[type] || {};
       for (const id of ids) {
-        let value = bucket[id];
-        if (type === 'app-state-sync-key' && value) {
-          value = proto.Message.AppStateSyncKeyData.fromObject(value);
-        }
-        if (value !== undefined && value !== null) {
-          data[id] = value;
+        const val = bucket[id];
+        if (val !== undefined && val !== null) {
+          data[id] = val;
         }
       }
       return data;

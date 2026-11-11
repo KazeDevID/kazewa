@@ -2,31 +2,14 @@
  * @license MIT
  * Copyright (c) 2026 Michael (KazeDevID)
  * Kazewa Compact Single-File Auth Engine
- * Replaces Baileys multi-file folder (100-500 files) with a single atomic compressed .kaze file
+ * Standalone implementation powered solely by native `node:crypto`, `node:fs`, and `node:zlib`
  */
-import { type AuthenticationCreds, type AuthenticationState } from '@whiskeysockets/baileys';
-export interface CompactAuthOptions {
-    compress?: boolean;
-    maxStoredPreKeys?: number;
-}
-export interface CompactAuthStats {
-    filePath: string;
-    fileSizeBytes: number;
-    fileSizeFormatted: string;
-    keysCount: number;
-    sessionCount: number;
-    preKeysCount: number;
-    compressionRatio: string;
-    lastSavedAt: number;
-}
-export interface CompactAuthResult {
-    state: AuthenticationState;
-    saveCreds: () => Promise<void>;
-    exportSessionString: () => string;
-    getStats: () => Promise<CompactAuthStats>;
-    cleanStaleKeys: () => Promise<number>;
-}
-export declare const initAuthCreds: () => AuthenticationCreds;
+import type { AuthenticationCreds, CompactAuthOptions, CompactAuthResult } from '../types/index.js';
+export declare const BufferJSON: {
+    replacer: (_key: string, value: any) => any;
+    reviver: (_key: string, value: any) => any;
+};
+export declare function initAuthCreds(): AuthenticationCreds;
 /**
  * High-performance, ultra-compact single-file WhatsApp auth state.
  * Stores all credentials and Signal protocol keys inside a single compressed .kaze file.

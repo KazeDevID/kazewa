@@ -1,12 +1,17 @@
 /**
  * @license MIT
  * Copyright (c) 2026 Michael (KazeDevID)
- * Cryptographic engine for Kazewa Signal & Noise Handshake
+ * Pure Native Cryptographic Engine for Kazewa Signal & WhatsApp Handshake
+ * Completely standalone using Node.js native `node:crypto`
  */
 import type { KeyPair, SignedKeyPair } from '../types/index.js';
 export declare class KazewaCrypto {
     /**
-     * Generates Curve25519 (X25519) key pair for Noise & Signal protocol
+     * Computes Curve25519 (X25519) Diffie-Hellman shared secret using native node:crypto
+     */
+    static x25519SharedKey(privateKey32: Buffer | Uint8Array, publicKey32: Buffer | Uint8Array): Buffer;
+    /**
+     * Generates Curve25519 (X25519) key pair
      */
     static generateKeyPair(): KeyPair;
     /**
@@ -14,7 +19,7 @@ export declare class KazewaCrypto {
      */
     static generateSignedPreKey(identityKeyPair: KeyPair, keyId: number): SignedKeyPair;
     /**
-     * Generates a batch of Pre-Keys with automatic IDs
+     * Generates a batch of Pre-Keys
      */
     static generatePreKeys(startId: number, count: number): {
         [keyId: string]: KeyPair;
@@ -46,9 +51,5 @@ export declare class KazewaCrypto {
      * Secure Random Bytes
      */
     static randomBytes(length: number): Buffer;
-    /**
-     * Generate 8-character Pairing Code in WhatsApp Web format (e.g. "ABCD-EFGH")
-     */
-    static generatePairingCodeFromEntropy(entropy?: Buffer): string;
 }
 //# sourceMappingURL=crypto.d.ts.map

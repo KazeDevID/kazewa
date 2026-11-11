@@ -2,44 +2,68 @@
  * @license MIT
  * Copyright (c) 2026 Michael (KazeDevID)
  * Kazewa Compact Single-File Auth Engine
- * Replaces Baileys multi-file folder (100-500 files) with a single atomic compressed .kaze file
+ * Standalone implementation powered solely by native `node:crypto`, `node:fs`, and `node:zlib`
  */
 
 import fs from 'node:fs';
 import path from 'node:path';
 import zlib from 'node:zlib';
-import {
-  BufferJSON,
-  initAuthCreds as baileysInitAuthCreds,
-  proto,
-  type AuthenticationCreds,
-  type AuthenticationState,
-  type SignalAuthState,
-  type SignalKeyStore
-} from '@whiskeysockets/baileys';
+import crypto from 'node:crypto';
+import { KazewaCrypto } from '../signal/crypto.js';
+import type {
+  AuthenticationCreds,
+  AuthenticationState,
+  CompactAuthOptions,
+  CompactAuthResult,
+  CompactAuthStats,
+  SignalKeyStore
+} from '../types/index.js';
 
-export interface CompactAuthOptions {
-  compress?: boolean;
-  maxStoredPreKeys?: number;
-}
+export const BufferJSON = {
+  replacer: (_key: string, value: any): any => {
+    if (Buffer.isBuffer(value) || value instanceof Uint8Array) {
+      return {
+        type: 'Buffer',
+        data: Buffer.from(value).toString('base64')
+      };
+    }
+    return value;
+  },
+  reviver: (_key: string, value: any): any => {
+    if (value && typeof value === 'object' && value.type === 'Buffer' && typeof value.data === 'string') {
+      return Buffer.from(value.data, 'base64');
+    }
+    return value;
+  }
+};
 
-export interface CompactAuthStats {
-  filePath: string;
-  fileSizeBytes: number;
-  fileSizeFormatted: string;
-  keysCount: number;
-  sessionCount: number;
-  preKeysCount: number;
-  compressionRatio: string;
-  lastSavedAt: number;
-}
+export function initAuthCreds(): AuthenticationCreds {
+  const identityKey = KazewaCrypto.generateKeyPair();
+  const signedPreKey = KazewaCrypto.generateSignedPreKey(identityKey, 1);
 
-export interface CompactAuthResult {
-  state: AuthenticationState;
-  saveCreds: () => Promise<void>;
-  exportSessionString: () => string;
-  getStats: () => Promise<CompactAuthStats>;
-  cleanStaleKeys: () => Promise<number>;
+  return {
+    noiseKey: KazewaCrypto.generateKeyPair(),
+    pairingEphemeralKeyPair: KazewaCrypto.generateKeyPair(),
+    signedIdentityKey: identityKey,
+    signedPreKey,
+    registrationId: crypto.randomInt(1000, 9999),
+    advSecretKey: crypto.randomBytes(32).toString('base64'),
+    processedHistoryMessages: [],
+    nextPreKeyId: 2,
+    firstUnuploadedPreKeyId: 2,
+    accountSyncCounter: 0,
+    accountSettings: {
+      unarchiveChats: false
+    },
+    deviceId: crypto.randomBytes(16).toString('hex'),
+    phoneId: crypto.randomUUID(),
+    identityId: crypto.randomBytes(20),
+    registered: false,
+    backupToken: crypto.randomBytes(20),
+    registration: {
+      platform: 'android'
+    }
+  };
 }
 
 interface StoredData {
@@ -53,8 +77,6 @@ interface StoredData {
   };
 }
 
-export const initAuthCreds = baileysInitAuthCreds;
-
 /**
  * High-performance, ultra-compact single-file WhatsApp auth state.
  * Stores all credentials and Signal protocol keys inside a single compressed .kaze file.
@@ -66,7 +88,6 @@ export async function useCompactAuthState(
   const compress = options.compress !== false;
   const maxPreKeys = options.maxStoredPreKeys || 50;
 
-  // Resolve target file path
   let targetFile = path.resolve(filePathOrDir);
   if (fs.existsSync(targetFile) && fs.statSync(targetFile).isDirectory()) {
     targetFile = path.join(targetFile, 'session.kaze');
@@ -74,7 +95,6 @@ export async function useCompactAuthState(
     targetFile = `${targetFile}.kaze`;
   }
 
-  // Ensure parent directory exists
   const parentDir = path.dirname(targetFile);
   if (!fs.existsSync(parentDir)) {
     fs.mkdirSync(parentDir, { recursive: true });
@@ -84,13 +104,11 @@ export async function useCompactAuthState(
   let keysStore: { [type: string]: { [id: string]: any } } = {};
   let lastSavedAt = Date.now();
 
-  // Load existing session if present
   if (fs.existsSync(targetFile)) {
     try {
       const rawBuffer = fs.readFileSync(targetFile);
       let jsonText: string;
 
-      // Detect if compressed with gzip (0x1f 0x8b)
       if (rawBuffer.length >= 2 && rawBuffer[0] === 0x1f && rawBuffer[1] === 0x8b) {
         jsonText = zlib.gunzipSync(rawBuffer).toString('utf-8');
       } else {
@@ -109,7 +127,6 @@ export async function useCompactAuthState(
     creds = initAuthCreds();
   }
 
-  // Atomic file save routine
   let isWriting = false;
   const saveToFile = async () => {
     if (isWriting) {
@@ -117,7 +134,6 @@ export async function useCompactAuthState(
     }
     isWriting = true;
     try {
-      // Prune pre-keys if beyond threshold to keep file small
       if (keysStore['pre-key']) {
         const preKeyIds = Object.keys(keysStore['pre-key']).map(Number).sort((a, b) => a - b);
         if (preKeyIds.length > maxPreKeys) {
@@ -166,12 +182,9 @@ export async function useCompactAuthState(
       const data: { [id: string]: T } = {};
       const bucket = keysStore[type] || {};
       for (const id of ids) {
-        let value = bucket[id];
-        if (type === 'app-state-sync-key' && value) {
-          value = proto.Message.AppStateSyncKeyData.fromObject(value);
-        }
-        if (value !== undefined && value !== null) {
-          data[id] = value;
+        const val = bucket[id];
+        if (val !== undefined && val !== null) {
+          data[id] = val;
         }
       }
       return data;
@@ -268,7 +281,6 @@ export async function useCompactAuthState(
     };
   };
 
-  // Perform initial save if file did not exist
   if (!fs.existsSync(targetFile)) {
     await saveToFile();
   }

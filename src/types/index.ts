@@ -2,24 +2,23 @@
  * @license MIT
  * Copyright (c) 2026 Michael (KazeDevID)
  * Kazewa WhatsApp Web Bot API & Protocol Library
+ * Pure standalone type definitions
  */
 
-import type {
-  AuthenticationCreds as BaileysAuthenticationCreds,
-  AuthenticationState as BaileysAuthenticationState,
-  SignalAuthState as BaileysSignalAuthState,
-  SignalKeyStore as BaileysSignalKeyStore,
-  ConnectionState as BaileysConnectionState,
-  DisconnectReason as BaileysDisconnectReason,
-  proto
-} from '@whiskeysockets/baileys';
+export enum DisconnectReason {
+  loggedOut = 401,
+  forbidden = 403,
+  timedOut = 408,
+  connectionClosed = 428,
+  connectionLost = 408,
+  connectionReplaced = 440,
+  badSession = 500,
+  restartRequired = 515,
+  multideviceMismatch = 411,
+  unavailableService = 503
+}
 
-export type DisconnectReason = BaileysDisconnectReason | string | number;
-export type AuthenticationCreds = BaileysAuthenticationCreds;
-export type AuthenticationState = BaileysAuthenticationState;
-export type SignalAuthState = BaileysSignalAuthState;
-export type SignalKeyStore = BaileysSignalKeyStore;
-export type ConnectionState = BaileysConnectionState;
+export type ConnectionState = 'close' | 'connecting' | 'open';
 
 export interface KeyPair {
   public: Uint8Array;
@@ -29,6 +28,59 @@ export interface KeyPair {
 export interface SignedKeyPair extends KeyPair {
   signature: Uint8Array;
   keyId: number;
+}
+
+export interface AuthenticationCreds {
+  noiseKey: KeyPair;
+  pairingEphemeralKeyPair: KeyPair;
+  signedIdentityKey: KeyPair;
+  signedPreKey: SignedKeyPair;
+  registrationId: number;
+  advSecretKey: string;
+  processedHistoryMessages: string[];
+  nextPreKeyId: number;
+  firstUnuploadedPreKeyId: number;
+  accountSyncCounter: number;
+  accountSettings: {
+    unarchiveChats: boolean;
+  };
+  deviceId: string;
+  phoneId: string;
+  identityId: Buffer;
+  registered: boolean;
+  pairingCode?: string;
+  backupToken: Buffer;
+  registration: {
+    phoneNumber?: string;
+    method?: 'qr' | 'code';
+    pairedAt?: number;
+    platform?: string;
+  };
+  me?: {
+    id: string;
+    name?: string;
+    lid?: string;
+  };
+  signalIdentities?: Array<{
+    identifier: { name: string; deviceId: number };
+    identifierKey: Uint8Array;
+  }>;
+}
+
+export interface SignalKeyStore {
+  get: <T>(type: string, ids: string[]) => Promise<{ [id: string]: T }>;
+  set: (data: { [type: string]: { [id: string]: any } }) => Promise<void>;
+  clear?: () => Promise<void>;
+}
+
+export interface AuthenticationState {
+  creds: AuthenticationCreds;
+  keys: SignalKeyStore;
+}
+
+export interface CompactAuthOptions {
+  compress?: boolean;
+  maxStoredPreKeys?: number;
 }
 
 export interface CompactAuthStats {
@@ -210,7 +262,7 @@ export interface SocketConfig {
 export type EventMap = {
   'connection.update': (update: ConnectionUpdate) => void;
   'creds.update': (creds: AuthenticationCreds) => void;
-  'messages.upsert': (data: { messages: any[]; type: 'notify' | 'append' }) => void;
+  'messages.upsert': (data: { messages: WebMessageInfo[]; type: 'notify' | 'append' }) => void;
   'messages.update': (data: { key: MessageKey; update: Partial<WebMessageInfo> }[]) => void;
   'presence.update': (data: { id: string; presences: { [participant: string]: { lastKnownPresence: string } } }) => void;
   'groups.update': (data: any) => void;

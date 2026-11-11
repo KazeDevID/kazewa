@@ -12,6 +12,26 @@ export interface BinaryNode {
   content?: BinaryNode[] | string | Buffer | Uint8Array;
 }
 
+export function getBinaryNodeChild(node: BinaryNode | undefined, tag: string): BinaryNode | undefined {
+  if (!node || !Array.isArray(node.content)) return undefined;
+  return node.content.find((child) => child && child.tag === tag);
+}
+
+export function getBinaryNodeChildBuffer(node: BinaryNode | undefined, tag: string): Buffer | undefined {
+  const child = getBinaryNodeChild(node, tag);
+  if (!child) return undefined;
+  if (Buffer.isBuffer(child.content)) return child.content;
+  if (child.content instanceof Uint8Array) return Buffer.from(child.content);
+  if (typeof child.content === 'string') return Buffer.from(child.content, 'utf-8');
+  return undefined;
+}
+
+export function getBinaryNodeChildren(node: BinaryNode | undefined, tag?: string): BinaryNode[] {
+  if (!node || !Array.isArray(node.content)) return [];
+  if (!tag) return node.content as BinaryNode[];
+  return node.content.filter((child) => child && child.tag === tag);
+}
+
 export function encodeBinaryNode(node: BinaryNode): Buffer {
   const buffer: number[] = [0]; // Descriptor version byte
   encodeNodeInner(node, buffer);
@@ -57,7 +77,6 @@ function writeString(str: string, buffer: number[]) {
     }
     return;
   }
-
   const utf8 = Buffer.from(str, 'utf-8');
   writeBytesLength(utf8.length, buffer);
   pushBytes(buffer, utf8);
@@ -80,7 +99,6 @@ function encodeNodeInner(node: BinaryNode, buffer: number[]) {
   const { tag, attrs, content } = node;
   const attrKeys = attrs ? Object.keys(attrs) : [];
 
-  // Determine list size: 1 (for tag) + 2 * attrs.length + (content !== undefined ? 1 : 0)
   const hasContent = content !== undefined;
   const listSize = 1 + attrKeys.length * 2 + (hasContent ? 1 : 0);
 

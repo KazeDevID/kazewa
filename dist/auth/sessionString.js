@@ -4,7 +4,7 @@
  * Zero-Disk Session String Auth Engine for Serverless & Cloud Deployments
  */
 import zlib from 'node:zlib';
-import { BufferJSON, initAuthCreds, proto } from '@whiskeysockets/baileys';
+import { BufferJSON, initAuthCreds } from './compactAuth.js';
 /**
  * Load WhatsApp session directly from a single Portable Session String (e.g. from process.env.SESSION_ID)
  */
@@ -52,12 +52,9 @@ export async function useSessionStringAuthState(sessionString, onUpdate) {
             const data = {};
             const bucket = keysStore[type] || {};
             for (const id of ids) {
-                let value = bucket[id];
-                if (type === 'app-state-sync-key' && value) {
-                    value = proto.Message.AppStateSyncKeyData.fromObject(value);
-                }
-                if (value !== undefined && value !== null) {
-                    data[id] = value;
+                const val = bucket[id];
+                if (val !== undefined && val !== null) {
+                    data[id] = val;
                 }
             }
             return data;

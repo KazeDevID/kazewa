@@ -4,6 +4,30 @@
  * WhatsApp Binary Node Serialization Engine
  */
 import { TAGS, TOKEN_MAP } from './constants.js';
+export function getBinaryNodeChild(node, tag) {
+    if (!node || !Array.isArray(node.content))
+        return undefined;
+    return node.content.find((child) => child && child.tag === tag);
+}
+export function getBinaryNodeChildBuffer(node, tag) {
+    const child = getBinaryNodeChild(node, tag);
+    if (!child)
+        return undefined;
+    if (Buffer.isBuffer(child.content))
+        return child.content;
+    if (child.content instanceof Uint8Array)
+        return Buffer.from(child.content);
+    if (typeof child.content === 'string')
+        return Buffer.from(child.content, 'utf-8');
+    return undefined;
+}
+export function getBinaryNodeChildren(node, tag) {
+    if (!node || !Array.isArray(node.content))
+        return [];
+    if (!tag)
+        return node.content;
+    return node.content.filter((child) => child && child.tag === tag);
+}
 export function encodeBinaryNode(node) {
     const buffer = [0]; // Descriptor version byte
     encodeNodeInner(node, buffer);
@@ -65,7 +89,6 @@ function writeBytesLength(length, buffer) {
 function encodeNodeInner(node, buffer) {
     const { tag, attrs, content } = node;
     const attrKeys = attrs ? Object.keys(attrs) : [];
-    // Determine list size: 1 (for tag) + 2 * attrs.length + (content !== undefined ? 1 : 0)
     const hasContent = content !== undefined;
     const listSize = 1 + attrKeys.length * 2 + (hasContent ? 1 : 0);
     if (listSize === 0) {
